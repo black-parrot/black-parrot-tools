@@ -24,9 +24,9 @@ tools: tools_lite
 tools_bsg: tools bsg_cadenv
 	$(MAKE) bsg_sv2v
 
-bsg_cadenv: $(BP_TOOLS_DIR)/bsg_cadenv
-$(BP_TOOLS_DIR)/bsg_cadenv:
-	-git clone git@github.com:bespoke-silicon-group/bsg_cadenv.git $(BP_TOOLS_DIR)/bsg_cadenv
+bsg_cadenv: $(BSG_CADENV_DIR)
+$(BSG_CADENV_DIR):
+	-git clone git@github.com:bespoke-silicon-group/bsg_cadenv.git $@
 
 tidy:
 	git submodule deinit -f verilator dromajo surelog axe bsg_sv2v
