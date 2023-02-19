@@ -1,12 +1,13 @@
 
 .PHONY: axe bsg_sv2v dromajo surelog verilator
 
-axe_dir       := $(BP_TOOLS_DIR)/axe
-bsg_sv2v_dir  := $(BP_TOOLS_DIR)/bsg_sv2v
-dromajo_dir   := $(BP_TOOLS_DIR)/dromajo
-surelog_dir   := $(BP_TOOLS_DIR)/Surelog
-verilator_dir := $(BP_TOOLS_DIR)/verilator
-yosys_dir := $(BP_TOOLS_DIR)/yosys
+axe_dir         := $(BP_TOOLS_DIR)/axe
+bsg_sv2v_dir    := $(BP_TOOLS_DIR)/bsg_sv2v
+dromajo_dir     := $(BP_TOOLS_DIR)/dromajo
+surelog_dir     := $(BP_TOOLS_DIR)/Surelog
+verilator_dir   := $(BP_TOOLS_DIR)/verilator
+yosys_dir       := $(BP_TOOLS_DIR)/yosys
+bsg_fakeram_dir := $(BP_TOOLS_DIR)/bsg_fakeram
 
 define submodule_tool_template
 $(1)_tag ?= $(addprefix $(1)., $(shell cd $(2); git rev-parse HEAD))
@@ -23,6 +24,9 @@ endef
 axe_build:
 	cd $(axe_dir)/src; ./make.sh
 	cp $(axe_dir)/src/axe $(BP_TOOLS_BIN_DIR)
+
+bsg_fakeram_build:
+	$(MAKE) -j1 -C $(bsg_fakeram_dir) tools
 
 bsg_sv2v_build:
 	$(MAKE) -j1 -C $(bsg_sv2v_dir) tools
@@ -56,6 +60,7 @@ yosys_build:
 	$(MAKE) -C $(yosys_dir) install PREFIX=$(BP_TOOLS_INSTALL_DIR)
 
 $(eval $(call submodule_tool_template,axe,$(axe_dir)))
+$(eval $(call submodule_tool_template,bsg_fakeram,$(bsg_fakeram_dir)))
 $(eval $(call submodule_tool_template,bsg_sv2v,$(bsg_sv2v_dir)))
 $(eval $(call submodule_tool_template,dromajo,$(dromajo_dir)))
 $(eval $(call submodule_tool_template,surelog,$(surelog_dir)))

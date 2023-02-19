@@ -30,6 +30,7 @@ export DC_SHELL  ?= dc_shell
 export VIVADO    ?= vivado
 export _DVE      ?= dve
 export GTKWAVE   ?= gtkwave
+export YOSYS     ?= yosys
 ## Specify license path if needed
 export LM_LICENSE_FILE ?=
 
