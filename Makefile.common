@@ -12,6 +12,7 @@ BP_TOOLS_INSTALL_DIR := $(BP_TOOLS_DIR)/install
 BP_TOOLS_BIN_DIR     := $(BP_TOOLS_INSTALL_DIR)/bin
 BP_TOOLS_LIB_DIR     := $(BP_TOOLS_INSTALL_DIR)/lib
 BP_TOOLS_INCLUDE_DIR := $(BP_TOOLS_INSTALL_DIR)/include
+BP_TOOLS_SHARE_DIR   := $(BP_TOOLS_INSTALL_DIR)/share
 BP_TOOLS_TOUCH_DIR   := $(BP_TOOLS_INSTALL_DIR)/touchfiles
 
 ## Setup CAD tools
@@ -30,6 +31,7 @@ export DC_SHELL  ?= dc_shell
 export VIVADO    ?= vivado
 export _DVE      ?= dve
 export GTKWAVE   ?= gtkwave
+export YOSYS     ?= yosys
 ## Specify license path if needed
 export LM_LICENSE_FILE ?=
 

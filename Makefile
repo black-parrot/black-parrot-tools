@@ -19,9 +19,11 @@ tools_lite: $(TOOL_TARGET_DIRS)
 ## This target makes the tools needed for the BlackParrot RTL
 tools: tools_lite
 	$(MAKE) surelog
+	$(MAKE) yosys
 	$(MAKE) axe
 
 tools_bsg: tools bsg_cadenv
+	$(MAKE) bsg_fakeram
 	$(MAKE) bsg_sv2v
 
 bsg_cadenv: $(BSG_CADENV_DIR)
