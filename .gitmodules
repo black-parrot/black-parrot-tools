@@ -34,3 +34,6 @@
     branch = master
     ignore = untracked
     update = checkout
+[submodule "bsg_fakeram"]
+	path = bsg_fakeram
+	url = https://github.com/bespoke-silicon-group/bsg_fakeram

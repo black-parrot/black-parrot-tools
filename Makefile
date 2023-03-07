@@ -23,7 +23,6 @@ tools: tools_lite
 	$(MAKE) axe
 
 tools_bsg: tools bsg_cadenv
-	$(MAKE) bsg_fakeram
 	$(MAKE) bsg_sv2v
 
 bsg_cadenv: $(BSG_CADENV_DIR)
