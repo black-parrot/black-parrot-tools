@@ -23,7 +23,9 @@ tools: tools_lite
 	$(MAKE) axe
 
 tools_bsg: tools bsg_cadenv
-	$(MAKE) bsg_sv2v
+	# Fails on first build attempt
+	$(MAKE) bsg_sv2v || $(MAKE) bsg_sv2v
+	$(MAKE) bsg_fakeram
 
 bsg_cadenv: $(BSG_CADENV_DIR)
 $(BSG_CADENV_DIR):

@@ -1,0 +1,25 @@
+From e5994f271736be2cf1a00966128a1dc759ec2bd9 Mon Sep 17 00:00:00 2001
+From: Mark Wyse <muwyse@gmail.com>
+Date: Mon, 22 Apr 2019 10:39:41 -0700
+Subject: [PATCH 1/2] increase number of allowable addresses
+
+---
+ src/Instr.h | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/src/Instr.h b/src/Instr.h
+index 7eb3a1f..7ec846c 100644
+--- a/src/Instr.h
++++ b/src/Instr.h
+@@ -2,7 +2,7 @@
+ #define _INSTR_H_
+ 
+ #define MAX_THREADS    256
+-#define MAX_ADDRS      256
++#define MAX_ADDRS      65536
+ #define MAX_DATA       8388608
+ 
+ typedef int InstrId;
+-- 
+2.16.5
+
