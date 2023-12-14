@@ -22,6 +22,7 @@ $(1)_manual:
 endef
 
 axe_build:
+	-@cd $(axe_dir); $(PATCH) $(BP_TOOLS_PATCH_DIR)/axe/*.patch
 	cd $(axe_dir)/src; ./make.sh
 	cp $(axe_dir)/src/axe $(BP_TOOLS_BIN_DIR)
 
@@ -53,9 +54,7 @@ verilator_build:
 	$(MAKE) -C $(verilator_dir) install
 
 yosys_build:
-	cd $(yosys_dir); \
-		sed -i "s/# CONFIG := gcc/CONFIG := gcc/g" Makefile; \
-		sed -i "s/CONFIG := clang/# CONFIG := clang/g" Makefile
+	-@cd $(yosys_dir); $(PATCH) $(BP_TOOLS_PATCH_DIR)/yosys/*.patch
 	$(MAKE) -C $(yosys_dir)
 	$(MAKE) -C $(yosys_dir) install PREFIX=$(BP_TOOLS_INSTALL_DIR)
 

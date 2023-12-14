@@ -1,0 +1,20 @@
+From eb2d7ba60b92abe5e5f16c994988006bd92bfbe9 Mon Sep 17 00:00:00 2001
+From: Mark Wyse <muwyse@gmail.com>
+Date: Thu, 7 Oct 2021 19:46:54 -0700
+Subject: [PATCH 2/2] ignore axe binary
+
+---
+ .gitignore | 1 +
+ 1 file changed, 1 insertion(+)
+ create mode 100644 .gitignore
+
+diff --git a/.gitignore b/.gitignore
+new file mode 100644
+index 0000000..46920d2
+--- /dev/null
++++ b/.gitignore
+@@ -0,0 +1 @@
++src/axe
+-- 
+2.16.5
+

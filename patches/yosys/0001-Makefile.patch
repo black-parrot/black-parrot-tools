@@ -1,0 +1,22 @@
+diff --git a/Makefile b/Makefile
+index b9c108981..8ec596064 100644
+--- a/Makefile
++++ b/Makefile
+@@ -1,6 +1,6 @@
+ 
+-CONFIG := clang
+-# CONFIG := gcc
++# # CONFIG := clang
++CONFIG := gcc
+ # CONFIG := afl-gcc
+ # CONFIG := emcc
+ # CONFIG := wasi
+@@ -1048,7 +1048,7 @@ config-clean: clean
+ 	rm -f Makefile.conf
+ 
+ config-clang: clean
+-	echo 'CONFIG := clang' > Makefile.conf
++	echo '# # CONFIG := clang' > Makefile.conf
+ 
+ config-gcc: clean
+ 	echo 'CONFIG := gcc' > Makefile.conf

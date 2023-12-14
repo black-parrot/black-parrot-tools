@@ -5,9 +5,15 @@ TOP ?= $(shell git rev-parse --show-toplevel)
 GCC       ?= gcc
 CMAKE     ?= $(if $(shell which cmake3),cmake3,cmake)
 PYTHON    ?= $(if $(shell which python3),python3,python)
+FIND      ?= find
+CP        ?= cp
+MKDIR     ?= mkdir
+MV        ?= mv
+PATCH     ?= git apply --ignore-whitespace --ignore-space-change
 
 ## Directories to install into
 BP_TOOLS_DIR         ?= $(TOP)
+BP_TOOLS_PATCH_DIR   := $(BP_TOOLS_DIR)/patches
 BP_TOOLS_INSTALL_DIR := $(BP_TOOLS_DIR)/install
 BP_TOOLS_BIN_DIR     := $(BP_TOOLS_INSTALL_DIR)/bin
 BP_TOOLS_LIB_DIR     := $(BP_TOOLS_INSTALL_DIR)/lib
