@@ -18,6 +18,7 @@ tools_lite: $(TOOL_TARGET_DIRS)
 
 ## This target makes the tools needed for the BlackParrot RTL
 tools: tools_lite
+	$(MAKE) spike
 	$(MAKE) surelog
 	$(MAKE) yosys
 	$(MAKE) axe

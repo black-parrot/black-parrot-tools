@@ -37,3 +37,6 @@
     branch = blackparrot_mods_1208
     ignore = untracked
 
+[submodule "riscv-isa-sim"]
+	path = riscv-isa-sim
+	url = https://github.com/riscv-software-src/riscv-isa-sim.git

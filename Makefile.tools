@@ -8,6 +8,7 @@ surelog_dir     := $(BP_TOOLS_DIR)/Surelog
 verilator_dir   := $(BP_TOOLS_DIR)/verilator
 yosys_dir       := $(BP_TOOLS_DIR)/yosys
 bsg_fakeram_dir := $(BP_TOOLS_DIR)/bsg_fakeram
+spike_dir       := $(BP_TOOLS_DIR)/riscv-isa-sim
 
 define submodule_tool_template
 $(1)_tag ?= $(addprefix $(1)., $(shell cd $(2); git rev-parse HEAD))
@@ -40,6 +41,12 @@ dromajo_build:
 	cp $(dromajo_dir)/build/libdromajo_cosim.a $(BP_TOOLS_LIB_DIR)
 	cp $(dromajo_dir)/include/dromajo_cosim.h $(BP_TOOLS_INCLUDE_DIR)
 
+spike_build:
+	cd $(spike_dir); \
+		./configure --prefix=$(BP_TOOLS_INSTALL_DIR)
+	$(MAKE) -C $(spike_dir)
+	$(MAKE) -C $(spike_dir) install
+
 surelog_build:
 	mkdir -p $(surelog_dir)/build
 	$(CMAKE) -S $(surelog_dir) -B $(surelog_dir)/build -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=$(BP_TOOLS_INSTALL_DIR)
@@ -58,11 +65,14 @@ yosys_build:
 	$(MAKE) -C $(yosys_dir)
 	$(MAKE) -C $(yosys_dir) install PREFIX=$(BP_TOOLS_INSTALL_DIR)
 
+
+
 $(eval $(call submodule_tool_template,axe,$(axe_dir)))
 $(eval $(call submodule_tool_template,bsg_fakeram,$(bsg_fakeram_dir)))
 $(eval $(call submodule_tool_template,bsg_sv2v,$(bsg_sv2v_dir)))
 $(eval $(call submodule_tool_template,dromajo,$(dromajo_dir)))
 $(eval $(call submodule_tool_template,surelog,$(surelog_dir)))
+$(eval $(call submodule_tool_template,spike,$(spike_dir)))
 $(eval $(call submodule_tool_template,verilator,$(verilator_dir)))
 $(eval $(call submodule_tool_template,yosys,$(yosys_dir)))
 
