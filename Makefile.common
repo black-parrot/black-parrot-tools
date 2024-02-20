@@ -11,6 +11,21 @@ MKDIR     ?= mkdir
 MV        ?= mv
 PATCH     ?= git apply --ignore-whitespace --ignore-space-change
 
+# Updating CC/CXX to latest supported
+ifneq ($(shell which gcc-12),)
+export CC=gcc-12
+export CXX=g++-12
+else ifneq ($(shell which gcc-11),)
+export CC=gcc-11
+export CXX=g++-11
+else ifneq ($(shell which gcc-10),)
+export CC=gcc-10
+export CXX=g++-10
+else ifneq ($(shell which gcc-9),)
+export CC=gcc-9
+export CXX=g++-9
+endif
+
 ## Directories to install into
 BP_TOOLS_DIR         ?= $(TOP)
 BP_TOOLS_PATCH_DIR   := $(BP_TOOLS_DIR)/patches
