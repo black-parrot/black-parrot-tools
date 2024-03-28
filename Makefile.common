@@ -2,24 +2,49 @@
 TOP ?= $(shell git rev-parse --show-toplevel)
 
 ## Set variables needed for building tools
-GCC       ?= gcc
-CMAKE     ?= $(if $(shell which cmake3),cmake3,cmake)
-PYTHON    ?= $(if $(shell which python3),python3,python)
-FIND      ?= find
-CP        ?= cp
-MKDIR     ?= mkdir
-MV        ?= mv
-PATCH     ?= git apply --ignore-whitespace --ignore-space-change
+export GCC       ?= gcc
+export CMAKE     ?= $(if $(shell which cmake3),cmake3,cmake)
+export PYTHON    ?= $(if $(shell which python3),python3,python)
+export XXD       ?= xxd
+export CURL      ?= curl
+export GIT       ?= git
+export FIND      ?= find
+export CP        ?= cp
+export MKDIR     ?= mkdir -p
+export MV        ?= mv
+export PATCH     ?= git apply --ignore-whitespace --ignore-space-change
+export TAR       ?= tar
+export WGET      ?= wget
+export CAT       ?= cat
+export SYMLINK   ?= ln -nsf
+export WCOUNT    ?= wc -l
+export ECHO      ?= echo
+export DIFF      ?= diff
+export TAIL      ?= tail
+export GREP      ?= grep
+export SED       ?= sed
+export TEST      ?= test
+export CD        ?= cd
+export TEE       ?= tee
+export RM        ?= rm
+export RMRF      ?= rm -rf
+export PRINTF    ?= printf
+export ENVSUBST  ?= envsubst
+export STTY      ?= stty
+export SURELOG   ?= surelog
+export DROMAJO   ?= dromajo
+export EXIT      ?= exit
+export TOUCH     ?= touch
 
 ## Directories to install into
-BP_TOOLS_DIR         ?= $(TOP)
-BP_TOOLS_PATCH_DIR   := $(BP_TOOLS_DIR)/patches
-BP_TOOLS_INSTALL_DIR := $(BP_TOOLS_DIR)/install
-BP_TOOLS_BIN_DIR     := $(BP_TOOLS_INSTALL_DIR)/bin
-BP_TOOLS_LIB_DIR     := $(BP_TOOLS_INSTALL_DIR)/lib
-BP_TOOLS_INCLUDE_DIR := $(BP_TOOLS_INSTALL_DIR)/include
-BP_TOOLS_SHARE_DIR   := $(BP_TOOLS_INSTALL_DIR)/share
-BP_TOOLS_TOUCH_DIR   := $(BP_TOOLS_INSTALL_DIR)/touchfiles
+export BP_TOOLS_DIR         ?= $(TOP)
+export BP_TOOLS_PATCH_DIR   := $(BP_TOOLS_DIR)/patches
+export BP_TOOLS_INSTALL_DIR := $(BP_TOOLS_DIR)/install
+export BP_TOOLS_BIN_DIR     := $(BP_TOOLS_INSTALL_DIR)/bin
+export BP_TOOLS_LIB_DIR     := $(BP_TOOLS_INSTALL_DIR)/lib
+export BP_TOOLS_INCLUDE_DIR := $(BP_TOOLS_INSTALL_DIR)/include
+export BP_TOOLS_SHARE_DIR   := $(BP_TOOLS_INSTALL_DIR)/share
+export BP_TOOLS_TOUCH_DIR   := $(BP_TOOLS_INSTALL_DIR)/touchfiles
 
 ## Setup CAD tools
 # If the machine you are working on is bsg_cadenv compliant, then you do not
