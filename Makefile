@@ -12,7 +12,12 @@ TOOL_TARGET_DIRS := $(BP_TOOLS_BIN_DIR) $(BP_TOOLS_LIB_DIR) $(BP_TOOLS_INCLUDE_D
 $(TOOL_TARGET_DIRS):
 	mkdir -p $@
 
-tools_lite: $(TOOL_TARGET_DIRS)
+# checkout submodules, but not recursively
+checkout: | $(TARGET_DIRS)
+	git fetch --all
+	cd $(BP_TOOLS_DIR); git submodule update --init
+
+tools_lite: checkout
 	$(MAKE) verilator
 	$(MAKE) dromajo
 
