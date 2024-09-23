@@ -5,19 +5,32 @@ TOP ?= $(shell git rev-parse --show-toplevel)
 include $(TOP)/Makefile.common
 include $(TOP)/Makefile.tools
 
+all: apply_patches
+
 help:
 	@echo "usage: make [tools, tools_lite, tools_bsg, tidy, bleach_all]"
 
-TOOL_TARGET_DIRS := $(BP_TOOLS_BIN_DIR) $(BP_TOOLS_LIB_DIR) $(BP_TOOLS_INCLUDE_DIR) $(BP_TOOLS_TOUCH_DIR)
-$(TOOL_TARGET_DIRS):
+override TARGET_DIRS := $(BP_TOOLS_BIN_DIR) $(BP_TOOLS_LIB_DIR) $(BP_TOOLS_INCLUDE_DIR) $(BP_TOOLS_TOUCH_DIR)
+$(TARGET_DIRS):
 	mkdir -p $@
 
 # checkout submodules, but not recursively
 checkout: | $(TARGET_DIRS)
 	git fetch --all
-	cd $(BP_TOOLS_DIR); git submodule update --init
+	git submodule sync --recursive
+	git submodule update --init
 
-tools_lite: checkout
+patch_tag ?= $(addprefix $(BP_TOOLS_TOUCH_DIR)/patch.,$(shell $(GIT) rev-parse HEAD))
+apply_patches: | $(patch_tag)
+$(patch_tag):
+	$(MAKE) checkout
+	git submodule update --init --recursive --recommend-shallow
+	$(call patch_if_new,$(axe_dir),$(BP_TOOLS_PATCH_DIR)/axe)
+	$(call patch_if_new,$(yosys_dir),$(BP_TOOLS_PATCH_DIR)/yosys)
+	touch $@
+	@echo "Patching successful, ignore errors"
+
+tools_lite: apply_patches
 	$(MAKE) verilator
 	$(MAKE) dromajo
 
