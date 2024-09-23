@@ -46,16 +46,6 @@ tools_bsg: tools bsg_cadenv
 	$(MAKE) bsg_sv2v || $(MAKE) bsg_sv2v
 	$(MAKE) bsg_fakeram
 
-bsg_cadenv: $(BSG_CADENV_DIR)
-$(BSG_CADENV_DIR):
-	-git clone git@github.com:bespoke-silicon-group/bsg_cadenv.git $@
-
-tidy:
-	git submodule deinit -f verilator dromajo surelog axe bsg_sv2v
-
-clean.tools:
-	rm -rf $(BP_TOOLS_TOUCH_DIR)
-
 ## This target just wipes the whole repo clean.
 #  Use with caution.
 bleach_all:

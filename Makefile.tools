@@ -62,8 +62,6 @@ yosys_build:
 	$(MAKE) -C $(yosys_dir)
 	$(MAKE) -C $(yosys_dir) install PREFIX=$(BP_TOOLS_INSTALL_DIR)
 
-
-
 $(eval $(call submodule_tool_template,axe,$(axe_dir)))
 $(eval $(call submodule_tool_template,bsg_fakeram,$(bsg_fakeram_dir)))
 $(eval $(call submodule_tool_template,bsg_sv2v,$(bsg_sv2v_dir)))

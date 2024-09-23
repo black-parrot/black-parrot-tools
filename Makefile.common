@@ -1,5 +1,69 @@
 ## Set common environment variables
-TOP ?= $(shell git rev-parse --show-toplevel)
+SHELL:=/bin/bash
+
+## Directories to install into
+export BP_TOOLS_DIR         ?= $(TOP)
+export BP_TOOLS_PATCH_DIR   := $(BP_TOOLS_DIR)/patches
+export BP_TOOLS_INSTALL_DIR := $(BP_TOOLS_DIR)/install
+export BP_TOOLS_BIN_DIR     := $(BP_TOOLS_INSTALL_DIR)/bin
+export BP_TOOLS_LIB_DIR     := $(BP_TOOLS_INSTALL_DIR)/lib
+export BP_TOOLS_INCLUDE_DIR := $(BP_TOOLS_INSTALL_DIR)/include
+export BP_TOOLS_SHARE_DIR   := $(BP_TOOLS_INSTALL_DIR)/share
+export BP_TOOLS_TOUCH_DIR   := $(BP_TOOLS_INSTALL_DIR)/touchfiles
+
+ifeq ($(TOP),$(BP_TOOLS_DIR))
+export BP_RTL_DIR ?= $(TOP)/../black-parrot
+include $(BP_RTL_DIR)/Makefile.common
+
+#export BP_TOOLS_DIR ?= $(TOP)/../black-parrot-tools
+#include $(BP_TOOLS_DIR)/Makefile.common
+
+export BP_SDK_DIR ?= $(TOP)/../black-parrot-sdk
+include $(BP_SDK_DIR)/Makefile.common
+
+## Setup CAD tools
+# If the machine you are working on is bsg_cadenv compliant, then you do not
+# need to setup the cad tools, simply put bsg_cadenv in the same root dir.
+BSG_CADENV_DIR ?= $(BP_SDK_DIR)/bsg_cadenv
+bsg_cadenv: $(BSG_CADENV_DIR)
+$(BSG_CADENV_DIR):
+	git clone git@github.com:bespoke-silicon-group/bsg_cadenv.git $@
+-include $(BSG_CADENV_DIR)/cadenv.mk
+endif
+
+define patch_if_new
+    $(eval $@_src_root = $(1))
+    $(eval $@_patch_root = $(2))
+    $(eval $@_patch_list = $(wildcard $($@_patch_root)/*.patch))
+    $(eval $@_patch_is_top = $(findstring patches,$(lastword $(subst /, ,$(dir $($@_patch_root))))))
+    for p in ${$@_patch_list}; \
+    do \
+        echo "Checking if patch is applicable"; \
+        cd ${$@_src_root}; $(CHECK_PATCH) $$p && continue; \
+        echo "Patch is unapplied..."; \
+        if [ $@_patch_is_top ]; then \
+        echo "Applying patch to sub-directory ${$@_src_root}; \
+        cd ${$@_src_root}; echo $$p; git am $$p; \
+        else \
+        echo "Applying patch to top-level ${$@_src_root}; \
+        cd ${$@_src_root}; echo $$p; git apply $$p; \
+        fi \
+    done
+endef
+
+## Override CAD tool paths if needed
+# Need to be exported for some CAD tools
+export VCS_HOME  ?=
+export VCS       ?= vcs
+export URG       ?= urg
+export VERILATOR ?= verilator
+export DC_SHELL  ?= dc_shell
+export VIVADO    ?= vivado
+export _DVE      ?= dve
+export GTKWAVE   ?= gtkwave
+export YOSYS     ?= yosys
+## Specify license path if needed
+export LM_LICENSE_FILE ?=
 
 ## Set variables needed for building tools
 export GCC       ?= gcc
@@ -36,56 +100,6 @@ export SURELOG   ?= surelog
 export DROMAJO   ?= dromajo
 export EXIT      ?= exit
 export TOUCH     ?= touch
-
-## Directories to install into
-export BP_TOOLS_DIR         ?= $(TOP)
-export BP_TOOLS_PATCH_DIR   := $(BP_TOOLS_DIR)/patches
-export BP_TOOLS_INSTALL_DIR := $(BP_TOOLS_DIR)/install
-export BP_TOOLS_BIN_DIR     := $(BP_TOOLS_INSTALL_DIR)/bin
-export BP_TOOLS_LIB_DIR     := $(BP_TOOLS_INSTALL_DIR)/lib
-export BP_TOOLS_INCLUDE_DIR := $(BP_TOOLS_INSTALL_DIR)/include
-export BP_TOOLS_SHARE_DIR   := $(BP_TOOLS_INSTALL_DIR)/share
-export BP_TOOLS_TOUCH_DIR   := $(BP_TOOLS_INSTALL_DIR)/touchfiles
-
-define patch_if_new
-    $(eval $@_src_root = $(1))
-    $(eval $@_patch_root = $(2))
-    $(eval $@_patch_list = $(wildcard $($@_patch_root)/*.patch))
-    $(eval $@_patch_is_top = $(findstring patches,$(lastword $(subst /, ,$(dir $($@_patch_root))))))
-    for p in ${$@_patch_list}; \
-    do \
-        echo "Checking if patch is applicable"; \
-        cd ${$@_src_root}; $(CHECK_PATCH) $$p && continue; \
-        echo "Patch is unapplied..."; \
-        if [ $@_patch_is_top ]; then \
-        echo "Applying patch to sub-directory ${$@_src_root}; \
-        cd ${$@_src_root}; echo $$p; git am $$p; \
-        else \
-        echo "Applying patch to top-level ${$@_src_root}; \
-        cd ${$@_src_root}; echo $$p; git apply $$p; \
-        fi \
-    done
-endef
-
-## Setup CAD tools
-# If the machine you are working on is bsg_cadenv compliant, then you do not
-# need to setup the cad tools, simply put bsg_cadenv in the same root dir.
-BSG_CADENV_DIR ?= $(BP_TOOLS_DIR)/bsg_cadenv
--include $(BSG_CADENV_DIR)/cadenv.mk
-
-## Override CAD tool paths if needed
-# Need to be exported for some CAD tools
-export VCS_HOME  ?=
-export VCS       ?= vcs
-export URG       ?= urg
-export VERILATOR ?= verilator
-export DC_SHELL  ?= dc_shell
-export VIVADO    ?= vivado
-export _DVE      ?= dve
-export GTKWAVE   ?= gtkwave
-export YOSYS     ?= yosys
-## Specify license path if needed
-export LM_LICENSE_FILE ?=
 
 export PATH := $(BP_TOOLS_INSTALL_DIR)/bin:$(PATH)
 
