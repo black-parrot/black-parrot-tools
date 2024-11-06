@@ -41,7 +41,7 @@ dromajo_build:
 
 spike_build:
 	cd $(spike_dir); \
-		./configure --prefix=$(BP_TOOLS_INSTALL_DIR)
+		./configure --prefix=$(BP_TOOLS_INSTALL_DIR) --with-boost-libdir=$(BOOST_ROOT)/lib
 	$(MAKE) -C $(spike_dir)
 	$(MAKE) -C $(spike_dir) install
 

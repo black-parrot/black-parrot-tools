@@ -10,7 +10,7 @@ all: apply_patches
 help:
 	@echo "usage: make [tools, tools_lite, tools_bsg, tidy, bleach_all]"
 
-override TARGET_DIRS := $(BP_TOOLS_BIN_DIR) $(BP_TOOLS_LIB_DIR) $(BP_TOOLS_INCLUDE_DIR) $(BP_TOOLS_TOUCH_DIR)
+override TARGET_DIRS := $(BP_TOOLS_BIN_DIR) $(BP_TOOLS_LIB_DIR) $(BP_TOOLS_INCLUDE_DIR) $(BP_TOOLS_TOUCH_DIR) $(BP_TOOLS_WORK_DIR)
 $(TARGET_DIRS):
 	mkdir -p $@
 

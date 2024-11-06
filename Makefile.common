@@ -10,6 +10,7 @@ export BP_TOOLS_LIB_DIR     := $(BP_TOOLS_INSTALL_DIR)/lib
 export BP_TOOLS_INCLUDE_DIR := $(BP_TOOLS_INSTALL_DIR)/include
 export BP_TOOLS_SHARE_DIR   := $(BP_TOOLS_INSTALL_DIR)/share
 export BP_TOOLS_TOUCH_DIR   := $(BP_TOOLS_INSTALL_DIR)/touchfiles
+export BP_TOOLS_WORK_DIR    := $(BP_TOOLS_INSTALL_DIR)/work
 
 ifeq ($(TOP),$(BP_TOOLS_DIR))
 export BP_RTL_DIR ?= $(TOP)/../black-parrot
