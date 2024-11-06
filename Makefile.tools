@@ -40,10 +40,11 @@ dromajo_build:
 	cp $(dromajo_dir)/include/dromajo_cosim.h $(BP_TOOLS_INCLUDE_DIR)
 
 spike_build:
-	cd $(spike_dir); \
-		./configure --prefix=$(BP_TOOLS_INSTALL_DIR) --with-boost-libdir=$(BOOST_ROOT)/lib
-	$(MAKE) -C $(spike_dir)
-	$(MAKE) -C $(spike_dir) install
+	echo "Spike build is deprecated"
+	#cd $(spike_dir); \
+	#	./configure --prefix=$(BP_TOOLS_INSTALL_DIR) --with-boost-libdir=$(BOOST_ROOT)/lib
+	#$(MAKE) -C $(spike_dir)
+	#$(MAKE) -C $(spike_dir) install
 
 surelog_build:
 	mkdir -p $(surelog_dir)/build
