@@ -1,0 +1,54 @@
+
+$(eval $(call bsg_fn_build_if_new,axe,$(BP_TOOLS_AXE_DIR),$(BP_TOOLS_TOUCH_DIR)))
+%/.axe_build:
+	@$(CD) $(@D)/src; ./make.sh
+	@$(CP) $(@D)/src/axe $(BP_TOOLS_BIN_DIR)
+
+$(eval $(call bsg_fn_build_if_new,bsg_fakeram,$(BP_TOOLS_FAKERAM_DIR),$(BP_TOOLS_TOUCH_DIR)))
+%/.bsg_fakeram_build:
+	@$(MAKE) -j1 -C $(@D) tools
+
+$(eval $(call bsg_fn_build_if_new,bsg_sv2v,$(BP_TOOLS_SV2V_DIR),$(BP_TOOLS_TOUCH_DIR)))
+%/.bsg_sv2v_build:
+	@$(MAKE) -j1 -C $(@D) tools
+
+$(eval $(call bsg_fn_build_if_new,dromajo,$(BP_TOOLS_DROMAJO_DIR),$(BP_TOOLS_TOUCH_DIR)))
+%/.dromajo_build:
+	@$(eval SOURCE_DIR := $(@D))
+	@$(eval BUILD_DIR := $(@D)/build)
+	@$(MKDIR) -p $(BUILD_DIR)
+	@$(CMAKE) -S $(SOURCE_DIR) -B $(BUILD_DIR) -DCMAKE_BUILD_TYPE=Release
+	@$(MAKE) -C $(BUILD_DIR)
+	@$(CP) $(BUILD_DIR)/dromajo $(BP_TOOLS_BIN_DIR)
+	@$(CP) $(BUILD_DIR)/libdromajo_cosim.a $(BP_TOOLS_LIB_DIR)
+	@$(CP) $(SOURCE_DIR)/include/* $(BP_TOOLS_INCLUDE_DIR)
+
+$(eval $(call bsg_fn_build_if_new,spike,$(BP_TOOLS_SPIKE_DIR),$(BP_TOOLS_TOUCH_DIR)))
+%/.spike_build:
+	@$(CD) $(@D); \
+		./configure --prefix=$(BP_TOOLS_INSTALL_DIR) \
+		--without-boost --without-boost-asio --without-boost-regex; \
+		$(MAKE) && $(MAKE) install
+
+$(eval $(call bsg_fn_build_if_new,surelog,$(BP_TOOLS_SURELOG_DIR),$(BP_TOOLS_TOUCH_DIR)))
+%/.surelog_build:
+	@$(eval BUILD_DIR := $(@D)/build)
+	@$(MKDIR) -p $(BUILD_DIR)
+	@$(CMAKE) -S $(@D) -B $(BUILD_DIR) -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=$(BP_TOOLS_INSTALL_DIR)
+	@$(CD) $(BUILD_DIR); \
+		$(MAKE) && $(MAKE) install
+
+$(eval $(call bsg_fn_build_if_new,verilator,$(BP_TOOLS_VERILATOR_DIR),$(BP_TOOLS_TOUCH_DIR)))
+%/.verilator_build:
+	@$(CD) $(@D); \
+		autoconf; \
+		./configure --prefix=$(BP_TOOLS_INSTALL_DIR);
+	@$(MAKE) -C $(@D)
+	@$(MAKE) -C $(@D) install
+	@$(CP) $(@D)/include/vltstd/svdpi.h $(BP_TOOLS_INCLUDE_DIR)
+
+$(eval $(call bsg_fn_build_if_new,yosys,$(BP_TOOLS_YOSYS_DIR),$(BP_TOOLS_TOUCH_DIR)))
+%/.yosys_build:
+	@$(CD) $(@D); \
+		$(MAKE) config-gcc && $(MAKE) && $(MAKE) install PREFIX=$(BP_TOOLS_INSTALL_DIR)
+
