@@ -1,0 +1,22 @@
+boost_tag     := $(BP_TOOLS_TOUCH_DIR)/boost.any
+
+PREREQS += $(boost_tag)
+
+BOOST_VERSION := 1.82.0
+BOOST := boost_$(subst .,_,$(BOOST_VERSION))
+BOOST_URL := https://sourceforge.net/projects/boost/files/boost/$(BOOST_VERSION)/$(BOOST).tar.gz/download
+$(boost_tag):
+	@$(CD) $(BP_TOOLS_WORK_DIR); \
+		$(WGET) -qO- $(BOOST_URL) | $(TAR) xzv
+	@$(CD) $(BP_TOOLS_WORK_DIR)/$(BOOST); \
+		./bootstrap.sh --prefix=$(BP_TOOLS_INSTALL_DIR)
+	@$(CD) $(BP_TOOLS_WORK_DIR)/$(BOOST); \
+		./b2 --prefix=$(BP_TOOLS_INSTALL_DIR) \
+			toolset=gcc \
+			cxxflags="-std=c++14" \
+			linkflags="-std=c++14" \
+			install
+	@$(TOUCH) $@
+
+prereqs: $(PREREQS)
+
