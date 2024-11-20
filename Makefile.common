@@ -136,6 +136,7 @@ BP_TOOLS_SPIKE_DIR     ?= $(BP_TOOLS_DIR)/riscv-isa-sim
 BP_TOOLS_SURELOG_DIR   ?= $(BP_TOOLS_DIR)/Surelog
 BP_TOOLS_VERILATOR_DIR ?= $(BP_TOOLS_DIR)/verilator
 BP_TOOLS_YOSYS_DIR     ?= $(BP_TOOLS_DIR)/yosys
+BP_TOOLS_YSLANG_DIR    ?= $(BP_TOOLS_DIR)/yosys-slang
 
 BSG_CADENV_DIR         ?= $(BP_TOOLS_DIR)/bsg_cadenv
 

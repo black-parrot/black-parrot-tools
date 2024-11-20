@@ -1,4 +1,21 @@
 
+$(eval $(call bsg_fn_build_if_missing,boost,$(BP_TOOLS_WORK_DIR),$(BP_TOOLS_TOUCH_DIR)))
+%/.boost_build:
+	@$(eval BOOST_VERSION := 1.82.0)
+	@$(eval BOOST := boost_$(subst .,_,$(BOOST_VERSION)))
+	@$(eval BOOST_URL := https://sourceforge.net/projects/boost/files/boost)
+	@$(eval BOOST_DOWNLOAD := $(BOOST_URL)/$(BOOST_VERSION)/$(BOOST).tar.gz/download)
+	@$(CD) $(@D); \
+		$(WGET) -qO- $(BOOST_DOWNLOAD) | $(TAR) xzv
+	@$(CD) $(@D)/$(BOOST); \
+		./bootstrap.sh --prefix=$(BP_TOOLS_INSTALL_DIR)
+	@$(CD) $(@D)/$(BOOST); \
+		./b2 --prefix=$(BP_TOOLS_INSTALL_DIR) \
+			toolset=gcc \
+			cxxflags="-std=c++14" \
+			linkflags="-std=c++14" \
+			install
+
 $(eval $(call bsg_fn_build_if_new,axe,$(BP_TOOLS_AXE_DIR),$(BP_TOOLS_TOUCH_DIR)))
 %/.axe_build:
 	@$(CD) $(@D)/src; ./make.sh
@@ -49,6 +66,17 @@ $(eval $(call bsg_fn_build_if_new,verilator,$(BP_TOOLS_VERILATOR_DIR),$(BP_TOOLS
 
 $(eval $(call bsg_fn_build_if_new,yosys,$(BP_TOOLS_YOSYS_DIR),$(BP_TOOLS_TOUCH_DIR)))
 %/.yosys_build:
+	@$(eval export PREFIX := $(BP_TOOLS_INSTALL_DIR))
 	@$(CD) $(@D); \
-		$(MAKE) config-gcc && $(MAKE) && $(MAKE) install PREFIX=$(BP_TOOLS_INSTALL_DIR)
+		$(MAKE) config-gcc && $(MAKE) && $(MAKE) install
+
+$(eval $(call bsg_fn_build_if_new,yslang,$(BP_TOOLS_YSLANG_DIR),$(BP_TOOLS_TOUCH_DIR)))
+%/.yslang_build:
+	@$(eval YOSYS_PLUGIN_DIR := $(BP_TOOLS_INSTALL_DIR)/share/yosys/plugins)
+	@$(eval export YOSYS_PREFIX := $(BP_TOOLS_INSTALL_DIR)/bin/)
+	@$(MKDIR) -p $(YOSYS_PLUGIN_DIR)
+	@$(CD) $(@D); \
+		$(MAKE) build; \
+		$(CP) build/*.so $(YOSYS_PLUGIN_DIR)
+
 
