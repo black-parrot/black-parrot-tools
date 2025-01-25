@@ -3,33 +3,27 @@ include $(TOP)/Makefile.common
 include $(TOP)/Makefile.env
 
 include $(BP_TOOLS_MK_DIR)/Makefile.tools
+include $(BP_TOOLS_MK_DIR)/Makefile.docker
 
-checkout: ## checkout submodules, but not recursively
+checkout: ## checkout submodules
 	@$(MKDIR) -p $(BP_TOOLS_BIN_DIR) \
 		$(BP_TOOLS_LIB_DIR) \
 		$(BP_TOOLS_INCLUDE_DIR) \
 		$(BP_TOOLS_TOUCH_DIR) \
-		$(BP_TOOLS_TOUCH_DIR) \
 		$(BP_TOOLS_WORK_DIR)
-	@$(GIT) fetch --all
+	# Synchronize any pending updates
+	@$(GIT) submodule sync
+	@$(GIT) submodule init
+	# Disable long checkouts
+	@$(GIT) -C $(BP_TOOLS_YSLANG_DIR) config --local submodule.tests/third_party/croc.update none
+	@$(GIT) -C $(BP_TOOLS_YSLANG_DIR) config --local submodule.tests/third_party/yosys.update none
 	@$(GIT) submodule sync --recursive
-	@$(GIT) submodule update --init
-
-apply_patches: ## applies patches to submodules
-apply_patches: build.patch
-$(eval $(call bsg_fn_build_if_new,patch,$(CURDIR),$(BP_TOOLS_TOUCH_DIR)))
-%/.patch_build: checkout
-	@$(GIT) submodule sync --recursive
-	@$(GIT) submodule update --init --recursive --recommend-shallow
-	@$(call patch_if_new,$(BP_TOOLS_AXE_DIR),$(BP_TOOLS_PATCH_DIR)/axe)
-	@$(call patch_if_new,$(BP_TOOLS_YOSYS_DIR),$(BP_TOOLS_PATCH_DIR)/yosys)
-	@$(ECHO) echo "Patching successful, ignore errors"
+	# Do the checkout
+	@$(GIT) submodule update --init --recursive
 
 tools_lite: ## minimal set of simulation tools
-tools_lite: apply_patches
-ifeq ($(CENTOS7),1)
+tools_lite: checkout
 	@$(MAKE) build.boost
-endif
 	@$(MAKE) build.verilator
 	@$(MAKE) build.dromajo
 

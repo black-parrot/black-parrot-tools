@@ -1,0 +1,40 @@
+
+DOCKER_PLATFORM ?= ubuntu24.04
+#DOCKER_PLATFORM ?= centos7
+CONTAINER_NAME ?= black-parrot-tools
+
+USE_LOCAL_CREDENTIALS ?=
+ifneq (,$(USE_LOCAL_CREDENTIALS))
+USER_NAME := $(USER)
+USER_ID := $(shell id -u)
+GROUP_NAME := $(USER)
+GROUP_ID := $(shell id -g)
+OTHER_GROUPS := $(shell id --groups)
+else
+USER_NAME := build
+USER_ID := 1234
+GROUP_NAME := build
+GROUP_ID := 5678
+OTHER_GROUPS :=
+endif
+
+WORKDIR := /work
+
+docker-image: ## creates a black-parrot-tools docker image
+	@$(CD) $(BP_TOOLS_DOCKER_DIR); \
+		$(DOCKER) build . -f Dockerfile.$(DOCKER_PLATFORM) \
+		--build-arg USER_NAME="$(USER_NAME)" \
+		--build-arg USER_ID="$(USER_ID)" \
+		--build-arg GROUP_NAME="$(GROUP_NAME)" \
+		--build-arg GROUP_ID="$(GROUP_ID)" \
+		--build-arg OTHER_GROUPS="$(OTHER_GROUPS)" \
+		--build-arg WORKDIR=$(WORKDIR) \
+		-t $(CONTAINER_NAME)
+
+docker-run: docker-image
+docker-run: ## mounts black-parrot-tools as a docker image
+	$(CD) $(BP_TOOLS_DOCKER_DIR); \
+		$(DOCKER) run \
+			--volume=$(TOP):$(WORKDIR)/$(CONTAINER_NAME) \
+			-it $(CONTAINER_NAME)
+

@@ -60,39 +60,56 @@ define bsg_fn_patch_if_new
 	done
 endef
 
-define bsg_fn_build_tag
+define bsg_tgt_build_tag
 	$(eval name := $(1))
 	$(eval src_dir := $(2))
 	$(eval touch_dir := $(3))
-	$(eval tag := $(4))
-	$(eval internal_target := $(src_dir)/.$(name)_build)
+	$(eval patch_dir := $(4))
+	$(eval tag := $(5))
+	$(eval patch_tag := $(touch_dir)/$(name).patch.$(tag))
+	$(eval build_tag := $(touch_dir)/$(name).build.$(tag))
+	$(eval patch_root := $(patch_dir)/$(lastword $(src_dir)))
+	$(eval patch_target := patch.$(name))
+	$(eval repatch_target := repatch.$(name))
 	$(eval external_target := build.$(name))
 	$(eval rebuild_target := rebuild.$(name))
+	$(eval internal_target := $(src_dir)/.$(name)_build)
 	$(eval MAKEFLAGS := $(filter-out $(EXTRAMAKEFLAGS),$(MAKEFLAGS)))
-$(external_target): | $(tag)
+$(external_target): | $(build_tag)
 $(rebuild_target):
-	rm -f $(touch_dir)/$(name).*
-	+$(MAKE) $(tag)
-$(tag):
+	rm -f $(touch_dir)/$(name).build.*
+	+$(MAKE) $(build_tag)
+$(build_tag): | $(patch_tag)
+	+$(MAKE) $(patch_target)
 	+$(MAKE) $(internal_target)
-	touch $(tag)
+	echo "Build of $(name) successful; ignore errors"
+	touch $(build_tag)
+$(patch_target): | $(patch_tag)
+$(repatch_target):
+	rm -f $(touch_dir)/$(name).patch.*
+	+$(MAKE) $(patch_tag)
+$(patch_tag):
+	$(call bsg_fn_patch_if_new,$(src_dir),$(patch_root))
+	echo "Patching successful; ignore errors"
+	touch $(patch_tag)
 endef
 
-define bsg_fn_build_if_missing
+define bsg_tgt_build_if_missing
 	$(eval name := $(1))
 	$(eval src_dir := $(2))
 	$(eval touch_dir := $(3))
-	$(eval tag := $(addprefix $(touch_dir)/$(name).,any))
-	$(call bsg_fn_build_tag,$(name),$(src_dir),$(touch_dir),$(tag))
+	$(eval patch_dir := $(4))
+	$(eval tag := any)
+	$(call bsg_tgt_build_tag,$(name),$(src_dir),$(touch_dir),$(patch_dir),$(tag))
 endef
 
-define bsg_fn_build_if_new
+define bsg_tgt_build_if_new
 	$(eval name := $(1))
 	$(eval src_dir := $(2))
 	$(eval touch_dir := $(3))
-	$(eval hash := $(shell cd $(src_dir); git rev-parse HEAD))
-	$(eval tag := $(addprefix $(touch_dir)/$(name).,$(hash)))
-	$(call bsg_fn_build_tag,$(name),$(src_dir),$(touch_dir),$(tag))
+	$(eval patch_dir := $(4))
+	$(eval tag := $(shell cd $(src_dir); git rev-parse HEAD))
+	$(call bsg_tgt_build_tag,$(name),$(src_dir),$(touch_dir),$(patch_dir),$(tag))
 endef
 
 define bsg_fn_info
@@ -120,6 +137,7 @@ endef
 BP_TOOLS_DIR         ?= $(TOP)
 BP_TOOLS_PATCH_DIR   ?= $(BP_TOOLS_DIR)/patches
 BP_TOOLS_INSTALL_DIR ?= $(BP_TOOLS_DIR)/install
+BP_TOOLS_DOCKER_DIR  ?= $(BP_TOOLS_DIR)/docker
 BP_TOOLS_MK_DIR      ?= $(BP_TOOLS_DIR)/mk
 BP_TOOLS_BIN_DIR     ?= $(BP_TOOLS_INSTALL_DIR)/bin
 BP_TOOLS_LIB_DIR     ?= $(BP_TOOLS_INSTALL_DIR)/lib
