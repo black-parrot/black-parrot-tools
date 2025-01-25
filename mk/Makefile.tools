@@ -5,6 +5,10 @@ $(eval $(call bsg_fn_build_if_missing,boost,$(BP_TOOLS_WORK_DIR),$(BP_TOOLS_TOUC
 	@$(eval BOOST := boost_$(subst .,_,$(BOOST_VERSION)))
 	@$(eval BOOST_URL := https://sourceforge.net/projects/boost/files/boost)
 	@$(eval BOOST_DOWNLOAD := $(BOOST_URL)/$(BOOST_VERSION)/$(BOOST).tar.gz/download)
+	@$(eval CONFIG_SCRIPT := "import sysconfig; print(sysconfig.get_config_h_filename\(\)\)")
+	@$(eval CONFIG_H := $(shell python -c "import sysconfig; print(sysconfig.get_config_h_filename());"))
+	@$(eval CONFIG_DIR := $(dir $(CONFIG_H)))
+	@$(eval export CPLUS_INCLUDE_PATH := $(CONFIG_DIR):$(CPLUS_INCLUDE_PATH))
 	@$(CD) $(@D); \
 		$(WGET) -qO- $(BOOST_DOWNLOAD) | $(TAR) xzv
 	@$(CD) $(@D)/$(BOOST); \
@@ -12,8 +16,6 @@ $(eval $(call bsg_fn_build_if_missing,boost,$(BP_TOOLS_WORK_DIR),$(BP_TOOLS_TOUC
 	@$(CD) $(@D)/$(BOOST); \
 		./b2 --prefix=$(BP_TOOLS_INSTALL_DIR) \
 			toolset=gcc \
-			cxxflags="-std=c++14" \
-			linkflags="-std=c++14" \
 			install
 
 $(eval $(call bsg_fn_build_if_new,axe,$(BP_TOOLS_AXE_DIR),$(BP_TOOLS_TOUCH_DIR)))
@@ -27,7 +29,14 @@ $(eval $(call bsg_fn_build_if_new,bsg_fakeram,$(BP_TOOLS_FAKERAM_DIR),$(BP_TOOLS
 
 $(eval $(call bsg_fn_build_if_new,bsg_sv2v,$(BP_TOOLS_SV2V_DIR),$(BP_TOOLS_TOUCH_DIR)))
 %/.bsg_sv2v_build:
-	@$(MAKE) -j1 -C $(@D) tools
+	@$(eval PYVERILOG_URL := https://github.com/PyHDI/Pyverilog.git)
+	@$(eval PYVERILOG_VER := 1.1.3)
+	@$(eval PYVERILOG_DIR := $(@D)/Pyverilog)
+	@$(RMRF) $(PYVERILOG_DIR)
+	@$(GIT) clone -b $(PYVERILOG_VER) $(PYVERILOG_URL) $(PYVERILOG_DIR)
+	@$(CD) $(PYVERILOG_DIR); $(GIT) apply $(@D)/patches/pyverilog_add_wirelist_reglist.patch
+	@$(CD) $(PYVERILOG_DIR); $(GIT) apply $(@D)/patches/pyverilog_sensitivity_comp.patch
+	@$(CD) $(PYVERILOG_DIR); $(PYTHON) setup.py install
 
 $(eval $(call bsg_fn_build_if_new,dromajo,$(BP_TOOLS_DROMAJO_DIR),$(BP_TOOLS_TOUCH_DIR)))
 %/.dromajo_build:

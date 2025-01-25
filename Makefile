@@ -3,6 +3,7 @@ include $(TOP)/Makefile.common
 include $(TOP)/Makefile.env
 
 include $(BP_TOOLS_MK_DIR)/Makefile.tools
+include $(BP_TOOLS_MK_DIR)/Makefile.docker
 
 checkout: ## checkout submodules, but not recursively
 	@$(MKDIR) -p $(BP_TOOLS_BIN_DIR) \
@@ -27,9 +28,7 @@ $(eval $(call bsg_fn_build_if_new,patch,$(CURDIR),$(BP_TOOLS_TOUCH_DIR)))
 
 tools_lite: ## minimal set of simulation tools
 tools_lite: apply_patches
-ifeq ($(CENTOS7),1)
 	@$(MAKE) build.boost
-endif
 	@$(MAKE) build.verilator
 	@$(MAKE) build.dromajo
 
