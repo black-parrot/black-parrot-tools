@@ -10,10 +10,15 @@ variables:
   ARTIFACT_COMPRESSION_LEVEL: "fastest"
   CACHE_COMPRESSION_LEVEL: "fastest"
   # Other varibles
+  USER_NAME: "${CI_USER_NAME}"
+  USER_ID: "${CI_USER_ID}"
+  GROUP_NAME: "${CI_GROUP_NAME}"
+  GROUP_ID: "${CI_GROUP_ID}"
   BSG_CADENV_DIR: "${CI_BSG_CADENV_DIR}"
   CORES_PER_JOB: "${CI_CORES_PER_JOB}"
   MISC_DIR: "${CI_MISC_DIR}"
   MAX_CORES: "${CI_MAX_CORES}"
+  # Automatic GitLab variables
   BRANCH: "${CI_COMMIT_REF_SLUG}"
   HASH: "${CI_COMMIT_SHA}"
   REPO_URL: "${CI_REPOSITORY_URL}"
@@ -48,8 +53,7 @@ build-image:
   variables:
     # Docker args
     DOCKER_PLATFORM : "ubuntu24.04"
-    CONTAINER_NAME: "black-parrot-tools"
-    USE_LOCAL_CREDENTIALS: "1"
+    CONTAINER_NAME: "black-parrot-tools-build"
     # GitLab variables
     GIT_STRATEGY: "fetch"
     GIT_FETCH_EXTRA_FLAGS: "--no-tags"
@@ -58,7 +62,12 @@ build-image:
     LOG_FILE: "${JOB_NAME}.log"
   script:
     - echo "[CI] Building docker image"
-    - make docker-image >> ${LOG_FILE} 2>&1;
+    - docker build -f docker/Dockerfile.${DOCKER_PLATFORM} \
+		--build-arg USER_NAME=${USER_NAME} \
+		--build-arg USER_ID=${USER_ID} \
+		--build-arg GROUP_NAME=${GROUP_NAME} \
+		--build-arg GROUP_ID=${GROUP_ID} \
+		-t ${CONTAINER_NAME}
 
 ###################################################
 ## Creating the ${REPO_NAME} repo
