@@ -43,7 +43,9 @@ stages:
 build-image:
   stage: docker
   extends: .job_template
-  image: alpine:latest
+  image:
+    name: alpine:latest
+    entrypoint: [""]
   variables:
     # GitLab variables
     GIT_STRATEGY: "fetch"
