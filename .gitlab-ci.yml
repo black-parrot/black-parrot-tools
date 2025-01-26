@@ -9,6 +9,9 @@ variables:
   FF_USE_FASTZIP: "true"
   ARTIFACT_COMPRESSION_LEVEL: "fastest"
   CACHE_COMPRESSION_LEVEL: "fastest"
+  GIT_CONFIG_COUNT: 1 # work around for https://gitlab.com/gitlab-org/gitlab/-/issues/386967
+  GIT_CONFIG_KEY_0: "safe.directory"
+  GIT_CONFIG_VALUE_0: "*"
   # Other varibles
   USER_NAME: "${CI_USER_NAME}"
   USER_ID: "${CI_USER_ID}"
