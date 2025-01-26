@@ -67,6 +67,3 @@ ENV PATH="$VIRTUAL_ENV/bin:$PATH"
 COPY requirements.txt /opt/venv/
 RUN pip install -r /opt/venv/requirements.txt
 
-# Kick off with bash
-ENTRYPOINT ["/bin/bash"]
-

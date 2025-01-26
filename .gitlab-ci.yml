@@ -45,8 +45,11 @@ build-image:
   extends: .job_template
   image:
     name: alpine:latest
-    entrypoint: [""]
   variables:
+    # Docker args
+    DOCKER_PLATFORM : "ubuntu24.04"
+    CONTAINER_NAME: "black-parrot-tools"
+    USE_LOCAL_CREDENTIALS: "1"
     # GitLab variables
     GIT_STRATEGY: "fetch"
     GIT_FETCH_EXTRA_FLAGS: "--no-tags"

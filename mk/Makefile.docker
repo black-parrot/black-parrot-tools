@@ -30,5 +30,6 @@ docker-run: ## mounts black-parrot-tools as a docker image
 		$(DOCKER) run \
 			--volume=$(TOP):/$(USER_NAME)/$(CONTAINER_NAME) \
 			--user $(USER_ID):$(GROUP_ID) \
+			--entrypoint "/bin/bash" \
 			-it $(CONTAINER_NAME)
 
