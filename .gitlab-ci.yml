@@ -30,6 +30,8 @@ variables:
   REPO_NAME: "${CI_PROJECT_NAME}"
   JOB_NAME: "${CI_JOB_NAME_SLUG}"
   CACHE_KEY: "${REPO_NAME}-${BRANCH}" # Cache per-branch
+  # Globals
+  CONTAINER_BUILD_IMAGE: ${REGISTRY_IMAGE}:build-${SHA}
 
 stages:
   - docker
@@ -53,14 +55,13 @@ stages:
 build-image:
   stage: docker
   extends: .job_template
-  image:
-    name: docker:24.0.5
+  image: docker:24.0.5
+    entrypoint: [""] 
   services:
     - docker:dind
   variables:
     # Docker args
     DOCKER_PLATFORM : "ubuntu24.04"
-    CONTAINER_BUILD_IMAGE: ${REGISTRY_IMAGE}:build-${SHA}
     # GitLab variables
     GIT_STRATEGY: "fetch"
     GIT_FETCH_EXTRA_FLAGS: "--no-tags"
@@ -85,19 +86,21 @@ build-image:
 ###################################################
 ## Creating the ${REPO_NAME} repo
 ###################################################
-##repo:
-##  stage: repo
-##  extends: .job_template
-##  variables:
-##    # GitLab variables
-##    GIT_STRATEGY: "fetch"
-##    GIT_FETCH_EXTRA_FLAGS: "--no-tags"
-##    GIT_CHECKOUT: "true"
-##    GIT_CLEAN_FLAGS: "-ffdx"
-##    LOG_FILE: "${JOB_NAME}.log"
-##  script:
-##    - echo "[CI] Doing checkout...";
-##    - make -j ${MAX_CORES} checkout >> ${LOG_FILE} 2>&1;
-##    - echo "[CI] Applying patches...";
-##    - make -j ${MAX_CORES} apply_patches >> ${LOG_FILE} 2>&1;
+repo:
+  stage: repo
+  extends: .job_template
+  image: ${CONTAINER_BUILD_IMAGE}
+    entrypoint: [""] 
+  variables:
+    # GitLab variables
+    GIT_STRATEGY: "fetch"
+    GIT_FETCH_EXTRA_FLAGS: "--no-tags"
+    GIT_CHECKOUT: "true"
+    GIT_CLEAN_FLAGS: "-ffdx"
+    LOG_FILE: "${JOB_NAME}.log"
+  script:
+    - echo "[CI] Doing checkout...";
+    - make -j ${MAX_CORES} checkout >> ${LOG_FILE} 2>&1;
+    - echo "[CI] Applying patches...";
+    - make -j ${MAX_CORES} apply_patches >> ${LOG_FILE} 2>&1;
 
