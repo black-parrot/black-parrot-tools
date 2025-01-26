@@ -92,6 +92,7 @@ repo:
   needs: ["build-image"]
   image:
     name: "${CONTAINER_BUILD_IMAGE}"
+    entrypoint: [""]
   variables:
     # GitLab variables
     GIT_STRATEGY: "fetch"
