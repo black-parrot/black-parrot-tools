@@ -89,6 +89,7 @@ build-image:
 repo:
   stage: repo
   extends: .job_template
+  needs: ["build-image"]
   image:
     name: "${CONTAINER_BUILD_IMAGE}"
   variables:
