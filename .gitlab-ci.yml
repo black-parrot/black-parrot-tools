@@ -55,8 +55,9 @@ stages:
 build-image:
   stage: docker
   extends: .job_template
-  image: docker:24.0.5
-    entrypoint: [""] 
+  image:
+    name: docker:24.0.5
+    entrypoint: [""]
   services:
     - docker:dind
   variables:
@@ -89,7 +90,8 @@ build-image:
 repo:
   stage: repo
   extends: .job_template
-  image: ${CONTAINER_BUILD_IMAGE}
+  image:
+    name: "${CONTAINER_BUILD_IMAGE}"
     entrypoint: [""] 
   variables:
     # GitLab variables
