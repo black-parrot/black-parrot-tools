@@ -22,6 +22,7 @@ variables:
   CACHE_KEY: "${REPO_NAME}-${BRANCH}" # Cache per-branch
 
 stages:
+  - docker
   - repo
 
 ###################################################
@@ -36,10 +37,10 @@ stages:
       - ${LOG_FILE}
 
 ###################################################
-## Creating the ${REPO_NAME} repo
+## Creating the docker image
 ###################################################
-repo:
-  stage: repo
+image:
+  stage: docker
   extends: .job_template
   variables:
     # GitLab variables
@@ -49,8 +50,25 @@ repo:
     GIT_CLEAN_FLAGS: "-ffdx"
     LOG_FILE: "${JOB_NAME}.log"
   script:
-    - echo "[CI] Doing checkout...";
-    - make -j ${MAX_CORES} checkout >> ${LOG_FILE} 2>&1;
-    - echo "[CI] Applying patches...";
-    - make -j ${MAX_CORES} apply_patches >> ${LOG_FILE} 2>&1;
+    - echo "[CI] Building docker image"
+    - make docker-image
+
+###################################################
+## Creating the ${REPO_NAME} repo
+###################################################
+##repo:
+##  stage: repo
+##  extends: .job_template
+##  variables:
+##    # GitLab variables
+##    GIT_STRATEGY: "fetch"
+##    GIT_FETCH_EXTRA_FLAGS: "--no-tags"
+##    GIT_CHECKOUT: "true"
+##    GIT_CLEAN_FLAGS: "-ffdx"
+##    LOG_FILE: "${JOB_NAME}.log"
+##  script:
+##    - echo "[CI] Doing checkout...";
+##    - make -j ${MAX_CORES} checkout >> ${LOG_FILE} 2>&1;
+##    - echo "[CI] Applying patches...";
+##    - make -j ${MAX_CORES} apply_patches >> ${LOG_FILE} 2>&1;
 

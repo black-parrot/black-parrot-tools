@@ -2,7 +2,7 @@
 DOCKER_PLATFORM ?= ubuntu24.04
 CONTAINER_NAME ?= black-parrot-tools
 
-USE_LOCAL_CREDENTIALS := 1
+USE_LOCAL_CREDENTIALS ?=
 ifneq (,$(USE_LOCAL_CREDENTIALS))
 USER_NAME := $(USER)
 USER_ID := $(shell id -u)
