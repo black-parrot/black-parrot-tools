@@ -62,7 +62,7 @@ build-image:
     LOG_FILE: "${JOB_NAME}.log"
   script:
     - echo "[CI] Building docker image"
-    - docker build -f docker/Dockerfile.${DOCKER_PLATFORM}
+    - docker build docker/ -f docker/Dockerfile.${DOCKER_PLATFORM}
       --build-arg USER_NAME=${USER_NAME}
       --build-arg USER_ID=${USER_ID}
       --build-arg GROUP_NAME=${GROUP_NAME}
