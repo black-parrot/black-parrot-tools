@@ -19,12 +19,16 @@ variables:
   MISC_DIR: "${CI_MISC_DIR}"
   MAX_CORES: "${CI_MAX_CORES}"
   # Automatic GitLab variables
-  BRANCH: "${CI_COMMIT_REF_SLUG}"
+  COMMIT: "${CI_COMMIT_REF_SLUG}"
+  REGISTRY: "${CI_REGISTRY}"
+  REGISTRY_USER: "${CI_REGISTRY_USER}"
+  REGISTRY_IMAGE: "${CI_REGISTRY_IMAGE}"
+  REGISTRY_PASSWORD: "${CI_REGISTRY_PASSWORD}"
   HASH: "${CI_COMMIT_SHA}"
   REPO_URL: "${CI_REPOSITORY_URL}"
   REPO_NAME: "${CI_PROJECT_NAME}"
   JOB_NAME: "${CI_JOB_NAME_SLUG}"
-  CACHE_KEY: "${REPO_NAME}-${BRANCH}" # Cache per-branch
+  CACHE_KEY: "${REPO_NAME}-${COMMIT}" # Cache per-branch
 
 stages:
   - docker
@@ -44,6 +48,7 @@ stages:
 ###################################################
 ## Creating the docker image
 ###################################################
+## https://docs.gitlab.com/ee/user/packages/container_registry/build_and_push_images.html
 build-image:
   stage: docker
   extends: .job_template
@@ -53,7 +58,7 @@ build-image:
   variables:
     # Docker args
     DOCKER_PLATFORM : "ubuntu24.04"
-    CONTAINER_NAME: "black-parrot-tools-build"
+    CONTAINER_BUILD_IMAGE: ${REGISTRY_IMAGE}:build-${COMMIT}
     # GitLab variables
     GIT_STRATEGY: "fetch"
     GIT_FETCH_EXTRA_FLAGS: "--no-tags"
@@ -67,7 +72,11 @@ build-image:
       --build-arg USER_ID=${USER_ID}
       --build-arg GROUP_NAME=${GROUP_NAME}
       --build-arg GROUP_ID=${GROUP_ID}
-      -t ${CONTAINER_NAME}
+      -t ${CONTAINER_BUILD_IMAGE} > ${LOG_FILE} 2>&1;
+    - echo "[CI] Logging into docker"
+    - echo "${REGISTRY_PASSWORD}" | docker login ${REGISTRY} -u ${REGISTRY_USER} --password-stdin
+    - echo "[CI] Publishing docker image"
+    - docker push ${CONTAINER_BUILD_IMAGE}
 
 ###################################################
 ## Creating the ${REPO_NAME} repo
