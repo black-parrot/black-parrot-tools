@@ -31,7 +31,6 @@ stages:
 .job_template:
   dependencies: []
   needs: []
-  entrypoint: [""]
   artifacts:
     when: always
     paths:
@@ -45,6 +44,7 @@ build-image:
   extends: .job_template
   image:
     name: alpine:latest
+    entrypoint: [""]
   variables:
     # Docker args
     DOCKER_PLATFORM : "ubuntu24.04"
