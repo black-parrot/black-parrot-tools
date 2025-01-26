@@ -31,6 +31,7 @@ stages:
 .job_template:
   dependencies: []
   needs: []
+  entrypoint: [""]
   artifacts:
     when: always
     paths:
@@ -42,7 +43,7 @@ stages:
 build-image:
   stage: docker
   extends: .job_template
-  image: gitlab/gitlab-runner:alpine
+  image: alpine:latest
   variables:
     # GitLab variables
     GIT_STRATEGY: "fetch"
