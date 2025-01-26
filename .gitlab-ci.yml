@@ -57,7 +57,6 @@ build-image:
   extends: .job_template
   image:
     name: docker:24.0.5
-    entrypoint: [""]
   services:
     - docker:dind
   variables:
@@ -92,7 +91,6 @@ repo:
   extends: .job_template
   image:
     name: "${CONTAINER_BUILD_IMAGE}"
-    entrypoint: [""] 
   variables:
     # GitLab variables
     GIT_STRATEGY: "fetch"
