@@ -43,7 +43,7 @@ build-image:
   stage: docker
   extends: .job_template
   image:
-    name: alpine:latest
+    name: docker:24.0.5
     entrypoint: [""]
   variables:
     # Docker args
