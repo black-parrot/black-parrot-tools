@@ -19,7 +19,8 @@ variables:
   MISC_DIR: "${CI_MISC_DIR}"
   MAX_CORES: "${CI_MAX_CORES}"
   # Automatic GitLab variables
-  COMMIT: "${CI_COMMIT_REF_SLUG}"
+  BRANCH: "${CI_COMMIT_REF_SLUG}"
+  SHA: "${CI_COMMIT_SHA}"
   REGISTRY: "${CI_REGISTRY}"
   REGISTRY_USER: "${CI_REGISTRY_USER}"
   REGISTRY_IMAGE: "${CI_REGISTRY_IMAGE}"
@@ -28,7 +29,7 @@ variables:
   REPO_URL: "${CI_REPOSITORY_URL}"
   REPO_NAME: "${CI_PROJECT_NAME}"
   JOB_NAME: "${CI_JOB_NAME_SLUG}"
-  CACHE_KEY: "${REPO_NAME}-${COMMIT}" # Cache per-branch
+  CACHE_KEY: "${REPO_NAME}-${BRANCH}" # Cache per-branch
 
 stages:
   - docker
@@ -54,11 +55,12 @@ build-image:
   extends: .job_template
   image:
     name: docker:24.0.5
-    entrypoint: [""]
+  services:
+    - docker:dind
   variables:
     # Docker args
     DOCKER_PLATFORM : "ubuntu24.04"
-    CONTAINER_BUILD_IMAGE: ${REGISTRY_IMAGE}:build-${COMMIT}
+    CONTAINER_BUILD_IMAGE: ${REGISTRY_IMAGE}:build-${SHA}
     # GitLab variables
     GIT_STRATEGY: "fetch"
     GIT_FETCH_EXTRA_FLAGS: "--no-tags"
@@ -66,6 +68,8 @@ build-image:
     GIT_CLEAN_FLAGS: "-ffdx"
     LOG_FILE: "${JOB_NAME}.log"
   script:
+    - echo "[CI] Checking docker"
+    - docker version
     - echo "[CI] Building docker image"
     - docker build docker/ -f docker/Dockerfile.${DOCKER_PLATFORM}
       --build-arg USER_NAME=${USER_NAME}
