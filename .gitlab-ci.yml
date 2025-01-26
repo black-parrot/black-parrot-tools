@@ -39,9 +39,10 @@ stages:
 ###################################################
 ## Creating the docker image
 ###################################################
-image:
+build-image:
   stage: docker
   extends: .job_template
+  image: gitlab/gitlab-runner:alpine
   variables:
     # GitLab variables
     GIT_STRATEGY: "fetch"
@@ -51,7 +52,7 @@ image:
     LOG_FILE: "${JOB_NAME}.log"
   script:
     - echo "[CI] Building docker image"
-    - make docker-image
+    - make docker-image >> ${LOG_FILE} 2>&1;
 
 ###################################################
 ## Creating the ${REPO_NAME} repo
