@@ -17,9 +17,7 @@ variables:
   USER_ID: "${CI_USER_ID}"
   GROUP_NAME: "${CI_GROUP_NAME}"
   GROUP_ID: "${CI_GROUP_ID}"
-  BSG_CADENV_DIR: "${CI_BSG_CADENV_DIR}"
   CORES_PER_JOB: "${CI_CORES_PER_JOB}"
-  MISC_DIR: "${CI_MISC_DIR}"
   MAX_CORES: "${CI_MAX_CORES}"
   # Automatic GitLab variables
   BRANCH: "${CI_COMMIT_REF_SLUG}"
