@@ -55,8 +55,8 @@ stages:
 ## https://docs.gitlab.com/ee/user/packages/container_registry/build_and_push_images.html
 .image_template:
   stage: docker
-  only:
-    changes:
+  rules:
+    - changes:
       - Makefile.common
       - Makefile.env
       - mk/Makefile.docker
@@ -91,8 +91,8 @@ stages:
 
 build-ubuntu-image:
   extends: .image_template
-  only:
-    changes:
+  rules:
+    - changes:
       - docker/Dockerfile.ubuntu24.04
       - docker/entrypoint.ubuntu24.04.sh
   variables:
@@ -100,8 +100,8 @@ build-ubuntu-image:
 
 build-centos-image:
   extends: .image_template
-  only:
-    changes:
+  rules:
+    - changes:
       - docker/Dockerfile.centos7
       - docker/entrypoint.centos7.sh
   variables:
