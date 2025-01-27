@@ -31,8 +31,6 @@ variables:
   REPO_NAME: "${CI_PROJECT_NAME}"
   JOB_NAME: "${CI_JOB_NAME_SLUG}"
   CACHE_KEY: "${REPO_NAME}-${BRANCH}" # Cache per-branch
-  # Globals
-  CONTAINER_BUILD_IMAGE: ${REGISTRY_IMAGE}:build-${SHA}
 
 stages:
   - docker
@@ -44,16 +42,18 @@ stages:
 .job_template:
   dependencies: []
   needs: []
+  variables:
+    LOG_FILE: "${JOB_NAME}.log"
   artifacts:
     when: always
     paths:
       - ${LOG_FILE}
 
 ###################################################
-## Creating the docker image
+## Creating the docker images
 ###################################################
 ## https://docs.gitlab.com/ee/user/packages/container_registry/build_and_push_images.html
-build-image:
+.image_template:
   stage: docker
   extends: .job_template
   image:
@@ -61,14 +61,13 @@ build-image:
   services:
     - docker:dind
   variables:
-    # Docker args
-    DOCKER_PLATFORM : "ubuntu24.04"
     # GitLab variables
     GIT_STRATEGY: "fetch"
     GIT_FETCH_EXTRA_FLAGS: "--no-tags"
     GIT_CHECKOUT: "true"
     GIT_CLEAN_FLAGS: "-ffdx"
-    LOG_FILE: "${JOB_NAME}.log"
+    # Globals
+    CONTAINER_BUILD_IMAGE: ${REGISTRY_IMAGE}:build-${DOCKER_PLATFORM}-${SHA}
   script:
     - echo "[CI] Checking docker"
     - docker version
@@ -84,26 +83,58 @@ build-image:
     - echo "[CI] Publishing docker image"
     - docker push ${CONTAINER_BUILD_IMAGE}
 
+build-ubuntu-image:
+  extends: .image_template
+  variables:
+    DOCKER_PLATFORM : "ubuntu24.04"
+
+build-centos-image:
+  extends: .image_template
+  variables:
+    DOCKER_PLATFORM : "centos7"
+
+###################################################
 ###################################################
 ## Creating the ${REPO_NAME} repo
 ###################################################
-repo:
-  stage: repo
-  extends: .job_template
-  needs: ["build-image"]
-  image:
-    name: "${CONTAINER_BUILD_IMAGE}"
-    entrypoint: [""]
-  variables:
-    # GitLab variables
-    GIT_STRATEGY: "fetch"
-    GIT_FETCH_EXTRA_FLAGS: "--no-tags"
-    GIT_CHECKOUT: "true"
-    GIT_CLEAN_FLAGS: "-ffdx"
-    LOG_FILE: "${JOB_NAME}.log"
-  script:
-    - echo "[CI] Doing checkout...";
-    - make -j ${MAX_CORES} checkout >> ${LOG_FILE} 2>&1;
-    - echo "[CI] Applying patches...";
-    - make -j ${MAX_CORES} apply_patches >> ${LOG_FILE} 2>&1;
+#repo:
+#  stage: repo
+#  extends: .job_template
+#  needs: ["build-image"]
+#  image:
+#    name: "${CONTAINER_BUILD_IMAGE}"
+#    entrypoint: [""]
+#  variables:
+#    # GitLab variables
+#    GIT_STRATEGY: "fetch"
+#    GIT_FETCH_EXTRA_FLAGS: "--no-tags"
+#    GIT_CHECKOUT: "true"
+#    GIT_CLEAN_FLAGS: "-ffdx"
+#    LOG_FILE: "${JOB_NAME}.log"
+#  script:
+#    - echo "[CI] Doing checkout...";
+#    - make -j ${MAX_CORES} checkout >> ${LOG_FILE} 2>&1;
+#    - echo "[CI] Applying patches...";
+#    - make -j ${MAX_CORES} apply_patches >> ${LOG_FILE} 2>&1;
+#
+#
+#tools_lite: ## minimal set of simulation tools
+#tools_lite: apply_patches
+#    @$(MAKE) build.boost
+#    @$(MAKE) build.verilator
+#    @$(MAKE) build.dromajo
+#
+#tools: ## standard tools
+#tools: tools_lite
+#    @$(MAKE) build.spike
+#    @$(MAKE) build.surelog
+#    @$(MAKE) build.yosys
+#    @$(MAKE) build.yslang
+#    @$(MAKE) build.axe
+#
+#tools_bsg: ## Additional tools for BSG users
+#tools_bsg: tools
+#    # Fails on first build attempt
+#    @$(MAKE) build.bsg_sv2v || $(MAKE) build.bsg_sv2v
+#    @$(MAKE) build.bsg_fakeram
 

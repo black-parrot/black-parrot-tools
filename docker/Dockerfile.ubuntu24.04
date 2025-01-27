@@ -34,8 +34,7 @@ RUN apt-get update && apt-get install -y \
 RUN apt-get update && apt-get install -y \
         gperf virtualenv \
         && apt-get clean
-#RUN apt-get update && apt-get install -y \
-#        && apt-get clean
+# bsg_fakeram
 
 # Accept arguments for user and group
 ARG USER_NAME
@@ -55,6 +54,10 @@ WORKDIR /$USER_NAME
 # Create directory for extra installation
 RUN mkdir -p /opt && chgrp $GROUP_NAME /opt && chmod 775 /opt
 
+# Create custom entrypoint script
+COPY entrypoint.ubuntu24.04.sh /usr/bin/entrypoint.sh
+RUN chmod +x /usr/bin/entrypoint.sh
+
 # Sets the current user
 USER $USER_NAME
 
@@ -62,11 +65,11 @@ USER $USER_NAME
 # This is in place of sourcing the environment
 #   (https://pythonspeed.com/articles/activate-virtualenv-dockerfile/)
 ENV VIRTUAL_ENV=/opt/venv
-RUN python -m venv $VIRTUAL_ENV
-ENV PATH="$VIRTUAL_ENV/bin:$PATH"
+RUN python3 -m venv $VIRTUAL_ENV
 COPY requirements.txt /opt/venv/
-RUN pip install -r /opt/venv/requirements.txt
+RUN /opt/venv/bin/pip install -r /opt/venv/requirements.txt
 
 # Kick off with bash
-ENTRYPOINT ["/bin/bash", "-l", "-c"]
+ENTRYPOINT [ "/usr/bin/entrypoint.sh" ]
+CMD ["/bin/bash"]
 

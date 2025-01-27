@@ -1,5 +1,6 @@
 
 DOCKER_PLATFORM ?= ubuntu24.04
+#DOCKER_PLATFORM ?= centos7
 CONTAINER_NAME ?= black-parrot-tools
 
 USE_LOCAL_CREDENTIALS ?=
@@ -30,6 +31,5 @@ docker-run: ## mounts black-parrot-tools as a docker image
 		$(DOCKER) run \
 			--volume=$(TOP):/$(USER_NAME)/$(CONTAINER_NAME) \
 			--user $(USER_ID):$(GROUP_ID) \
-			--entrypoint "/bin/bash" \
 			-it $(CONTAINER_NAME)
 
