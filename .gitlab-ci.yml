@@ -43,8 +43,6 @@ stages:
 ## Base Job Template
 ###################################################
 .job_template:
-  dependencies: []
-  needs: []
   variables:
     LOG_FILE: "${JOB_NAME}.log"
   artifacts:
