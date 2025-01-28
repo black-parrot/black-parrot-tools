@@ -112,7 +112,9 @@ build-centos-image:
 repo:
   stage: repo
   extends: .job_template
-  needs: ["build-centos-image"]
+  needs:
+    - job: "build-centos-image"
+      optional: true
   image:
     name: "${CONTAINER_BUILD_IMAGE}"
     entrypoint: [""]
