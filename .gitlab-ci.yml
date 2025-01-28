@@ -56,14 +56,14 @@ stages:
 ## https://docs.gitlab.com/ee/user/packages/container_registry/build_and_push_images.html
 .image_template:
   stage: docker
-  rules:
-    - changes:
-      - Makefile.common
-      - Makefile.env
-      - mk/Makefile.docker
-      - docker/requirements.txt
-      - docker/Dockerfile.${DOCKER_PLATFORM}
-      - docker/entrypoint.${DOCKER_PLATFORM}.sh
+  #rules:
+  #  - changes:
+  #    - Makefile.common
+  #    - Makefile.env
+  #    - mk/Makefile.docker
+  #    - docker/requirements.txt
+  #    - docker/Dockerfile.${DOCKER_PLATFORM}
+  #    - docker/entrypoint.${DOCKER_PLATFORM}.sh
   extends: .job_template
   image:
     name: docker:24.0.5
@@ -77,6 +77,7 @@ stages:
     GIT_CLEAN_FLAGS: "-ffdx"
     # Globals
     CONTAINER_BUILD_IMAGE: "${REGISTRY_IMAGE}:build-${DOCKER_PLATFORM}-${SHA}"
+    CONTAINER_BUILD_LATEST: "${REGISTRY_IMAGE}:build-${DOCKER_PLATFORM}:latest"
   script:
     - echo "[CI] Checking docker"
     - docker version
@@ -87,7 +88,8 @@ stages:
       --build-arg GROUP_NAME=${GROUP_NAME}
       --build-arg GROUP_ID=${GROUP_ID}
       --build-arg OTHER_GROUPS=${OTHER_GROUPS}
-      -t ${CONTAINER_BUILD_IMAGE} > ${LOG_FILE} 2>&1;
+      -t ${CONTAINER_BUILD_IMAGE}
+      -t ${CONTAINER_BUILD_LATEST} > ${LOG_FILE} 2>&1;
     - echo "[CI] Logging into docker"
     - echo "${REGISTRY_PASSWORD}" | docker login ${REGISTRY} -u ${REGISTRY_USER} --password-stdin
     - echo "[CI] Publishing docker image"
