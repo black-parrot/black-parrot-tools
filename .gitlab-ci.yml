@@ -6,10 +6,12 @@ variables:
   GIT_SUBMODULE_STRATEGY: "none"
   GIT_CHECKOUT: "false"
   GIT_CLEAN_FLAGS: "none"
+  # performance
   FF_USE_FASTZIP: "true"
   ARTIFACT_COMPRESSION_LEVEL: "fastest"
   CACHE_COMPRESSION_LEVEL: "fastest"
-  GIT_CONFIG_COUNT: 1 # work around for https://gitlab.com/gitlab-org/gitlab/-/issues/386967
+  # work around for https://gitlab.com/gitlab-org/gitlab/-/issues/386967
+  GIT_CONFIG_COUNT: 1
   GIT_CONFIG_KEY_0: "safe.directory"
   GIT_CONFIG_VALUE_0: "*"
   # Other varibles
@@ -17,6 +19,7 @@ variables:
   USER_ID: "${CI_USER_ID}"
   GROUP_NAME: "${CI_GROUP_NAME}"
   GROUP_ID: "${CI_GROUP_ID}"
+  OTHER_GROUPS: "${CI_OTHER_GROUPS}"
   CORES_PER_JOB: "${CI_CORES_PER_JOB}"
   MAX_CORES: "${CI_MAX_CORES}"
   # Automatic GitLab variables
@@ -61,6 +64,8 @@ stages:
       - Makefile.env
       - mk/Makefile.docker
       - docker/requirements.txt
+      - docker/Dockerfile.${DOCKER_PLATFORM}
+      - docker/entrypoint.${DOCKER_PLATFORM}.sh
   extends: .job_template
   image:
     name: docker:24.0.5
@@ -73,7 +78,7 @@ stages:
     GIT_CHECKOUT: "true"
     GIT_CLEAN_FLAGS: "-ffdx"
     # Globals
-    CONTAINER_BUILD_IMAGE: ${REGISTRY_IMAGE}:build-${DOCKER_PLATFORM}-${SHA}
+    CONTAINER_BUILD_IMAGE: "${REGISTRY_IMAGE}:build-${DOCKER_PLATFORM}-${SHA}"
   script:
     - echo "[CI] Checking docker"
     - docker version
@@ -83,27 +88,22 @@ stages:
       --build-arg USER_ID=${USER_ID}
       --build-arg GROUP_NAME=${GROUP_NAME}
       --build-arg GROUP_ID=${GROUP_ID}
+      --build-arg OTHER_GROUPS=${OTHER_GROUPS}
       -t ${CONTAINER_BUILD_IMAGE} > ${LOG_FILE} 2>&1;
     - echo "[CI] Logging into docker"
     - echo "${REGISTRY_PASSWORD}" | docker login ${REGISTRY} -u ${REGISTRY_USER} --password-stdin
     - echo "[CI] Publishing docker image"
     - docker push ${CONTAINER_BUILD_IMAGE}
+  tag: # Use shared gitlab runner
+    - saas-linux-small-amd64
 
 build-ubuntu-image:
   extends: .image_template
-  rules:
-    - changes:
-      - docker/Dockerfile.ubuntu24.04
-      - docker/entrypoint.ubuntu24.04.sh
   variables:
     DOCKER_PLATFORM : "ubuntu24.04"
 
 build-centos-image:
   extends: .image_template
-  rules:
-    - changes:
-      - docker/Dockerfile.centos7
-      - docker/entrypoint.centos7.sh
   variables:
     DOCKER_PLATFORM : "centos7"
 
@@ -111,25 +111,29 @@ build-centos-image:
 ###################################################
 ## Creating the ${REPO_NAME} repo
 ###################################################
-#repo:
-#  stage: repo
-#  extends: .job_template
-#  needs: ["build-image"]
-#  image:
-#    name: "${CONTAINER_BUILD_IMAGE}"
-#    entrypoint: [""]
-#  variables:
-#    # GitLab variables
-#    GIT_STRATEGY: "fetch"
-#    GIT_FETCH_EXTRA_FLAGS: "--no-tags"
-#    GIT_CHECKOUT: "true"
-#    GIT_CLEAN_FLAGS: "-ffdx"
-#    LOG_FILE: "${JOB_NAME}.log"
-#  script:
-#    - echo "[CI] Doing checkout...";
-#    - make -j ${MAX_CORES} checkout >> ${LOG_FILE} 2>&1;
-#    - echo "[CI] Applying patches...";
-#    - make -j ${MAX_CORES} apply_patches >> ${LOG_FILE} 2>&1;
+repo:
+  stage: repo
+  extends: .job_template
+  needs: ["build-image"]
+  image:
+    name: "${CONTAINER_BUILD_IMAGE}"
+    entrypoint: [""]
+  variables:
+    # GitLab variables
+    GIT_STRATEGY: "fetch"
+    GIT_FETCH_EXTRA_FLAGS: "--no-tags"
+    GIT_CHECKOUT: "true"
+    GIT_CLEAN_FLAGS: "-ffdx"
+    LOG_FILE: "${JOB_NAME}.log"
+    # Globals
+    DOCKER_PLATFORM: "centos7"
+    CONTAINER_BUILD_IMAGE: "${REGISTRY_IMAGE}:build-${DOCKER_PLATFORM}-${SHA}"
+  script:
+    - echo "[CI] Doing checkout...";
+    - make -j ${MAX_CORES} checkout >> ${LOG_FILE} 2>&1;
+    - echo "[CI] Applying patches...";
+    - make -j ${MAX_CORES} apply_patches >> ${LOG_FILE} 2>&1;
+
 #
 #
 #tools_lite: ## minimal set of simulation tools

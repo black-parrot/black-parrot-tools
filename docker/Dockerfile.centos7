@@ -1,20 +1,34 @@
-FROM centos:7
+FROM centos:centos7.9.2009
 
 # Update for deprecated Centos7 mirrors
-# https://stackoverflow.com/questions/78692851/could-not-retrieve-mirrorlist-http-mirrorlist-centos-org-release-7arch-x86-6
-RUN sed -i 's/mirrorlist/#mirrorlist/g' /etc/yum.repos.d/CentOS-*
-RUN sed -i 's|#baseurl=http://mirror.centos.org|baseurl=http://vault.centos.org|g' /etc/yum.repos.d/CentOS-*
+RUN sed -i 's|enabled=1|enabled=0|g' /etc/yum/pluginconf.d/fastestmirror.conf
+RUN sed -i 's|^mirrorlist=http|#mirrorlist=http|g' /etc/yum.repos.d/CentOS-*.repo
+RUN sed -i 's|^#.*baseurl=http|baseurl=http|g' /etc/yum.repos.d/CentOS-*.repo
+RUN sed -i 's|.*baseurl=http://mirror.centos.org/centos/\$releasever|baseurl=http://archive.kernel.org/centos-vault/7.9.2009|g' /etc/yum.repos.d/CentOS-*.repo
 
 # Install centos libraries
-RUN yum update -y && yum install -y \
+RUN yum install -y \
     autoconf automake bash bc binutils bison bzip2 cpio \
     dtc expat-devel file flex gawk gcc gcc-c++ git gmp-devel gzip gtkwave \
     java-11-openjdk-headless libmpc-devel libuuid-devel make mpfr-devel \
     patch patchutils perl perl-ExtUtils-MakeMaker python3 python3-pip rsync \
     sed tar tcl tcl-devel  tk tk-devel texinfo unzip vim vim-common virtualenv which zlib-devel \
     help2man readline-devel libreadline-devel libffi-devel wget openssl-devel python-devel \
+    && yum clean all
+
+# Install EPEL libraries
+RUN yum install -y \
     epel-release centos-release-scl scl-utils \
-    devtoolset-11 rh-git218
+    && yum clean all
+
+# Same thing for SCL mirrors
+RUN sed -i 's|^mirrorlist|#mirrorlist|g' /etc/yum.repos.d/CentOS-*
+RUN sed -i 's|^#baseurl=http://mirror.centos.org/centos/7|baseurl=http://vault.epel.cloud/7.9.2009|g' /etc/yum.repos.d/CentOS-SCLo-*
+RUN sed -i 's|^# baseurl=http://mirror.centos.org/centos/7|baseurl=http://vault.epel.cloud/7.9.2009|g' /etc/yum.repos.d/CentOS-SCLo-*
+
+RUN yum install -y \
+    devtoolset-11 rh-git218 \
+    && yum clean all
 # Install cmake
 RUN wget https://cmake.org/files/v3.22/cmake-3.22.3.tar.gz && \
     tar -xzvf cmake-3.* && \
@@ -58,13 +72,10 @@ RUN chmod +x /usr/bin/entrypoint.sh
 USER $USER_NAME
 
 # Create a python virtualenv
-# This is in place of sourcing the environment
-#   (https://pythonspeed.com/articles/activate-virtualenv-dockerfile/)
 ENV VIRTUAL_ENV=/opt/venv
 RUN python3 -m venv $VIRTUAL_ENV
-ENV PATH="$VIRTUAL_ENV/bin:$PATH"
 COPY requirements.txt /opt/venv/
-RUN pip3 install -r /opt/venv/requirements.txt
+RUN /opt/venv/bin/pip install -r /opt/venv/requirements.txt
 
 # Kick off with bash
 ENTRYPOINT [ "/usr/bin/entrypoint.sh" ]

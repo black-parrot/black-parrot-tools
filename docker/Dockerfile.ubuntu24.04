@@ -41,12 +41,20 @@ ARG USER_NAME
 ARG USER_ID
 ARG GROUP_NAME
 ARG GROUP_ID
+ARG OTHER_GROUPS
 
 # Only create the group if it doesn't exist
 RUN getent group $GROUP_ID || groupadd --gid $GROUP_ID $GROUP_NAME
 
 # Use --no-log-init to deal with large userids creating giant log files
-RUN useradd --no-log-init --uid $USER_ID --gid $GROUP_ID --shell /bin/bash --create-home $USER_NAME
+RUN useradd --no-log-init --uid $USER_ID --gid $GROUP_ID --shell /bin/bash --no-log-init $USER_NAME
+
+# Add the user to other groups
+RUN for gid in ${OTHER_GROUPS}; do \
+        echo "group$gid"; \
+        groupadd -g $gid "group$gid" || true; \
+        usermod -aG "group$gid" $USER_NAME; \
+    done
 
 # Sets working directory
 WORKDIR /$USER_NAME
@@ -62,8 +70,6 @@ RUN chmod +x /usr/bin/entrypoint.sh
 USER $USER_NAME
 
 # Create a python virtualenv
-# This is in place of sourcing the environment
-#   (https://pythonspeed.com/articles/activate-virtualenv-dockerfile/)
 ENV VIRTUAL_ENV=/opt/venv
 RUN python3 -m venv $VIRTUAL_ENV
 COPY requirements.txt /opt/venv/
@@ -71,5 +77,5 @@ RUN /opt/venv/bin/pip install -r /opt/venv/requirements.txt
 
 # Kick off with bash
 ENTRYPOINT [ "/usr/bin/entrypoint.sh" ]
-CMD ["/bin/bash"]
+CMD ["/bin/bash", "-l"]
 
