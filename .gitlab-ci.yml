@@ -94,7 +94,7 @@ stages:
     - echo "${REGISTRY_PASSWORD}" | docker login ${REGISTRY} -u ${REGISTRY_USER} --password-stdin
     - echo "[CI] Publishing docker image"
     - docker push ${CONTAINER_BUILD_IMAGE}
-  tag: # Use shared gitlab runner
+  tags: # Use shared gitlab runner
     - saas-linux-small-amd64
 
 build-ubuntu-image:
@@ -114,7 +114,7 @@ build-centos-image:
 repo:
   stage: repo
   extends: .job_template
-  needs: ["build-image"]
+  needs: ["build-centos-image"]
   image:
     name: "${CONTAINER_BUILD_IMAGE}"
     entrypoint: [""]
