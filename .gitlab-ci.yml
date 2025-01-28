@@ -77,7 +77,6 @@ stages:
     GIT_CLEAN_FLAGS: "-ffdx"
     # Globals
     CONTAINER_BUILD_IMAGE: "${REGISTRY_IMAGE}:build-${DOCKER_PLATFORM}-${SHA}"
-    CONTAINER_BUILD_LATEST: "${REGISTRY_IMAGE}:build-${DOCKER_PLATFORM}:latest"
   script:
     - echo "[CI] Checking docker"
     - docker version
@@ -88,8 +87,7 @@ stages:
       --build-arg GROUP_NAME=${GROUP_NAME}
       --build-arg GROUP_ID=${GROUP_ID}
       --build-arg OTHER_GROUPS=${OTHER_GROUPS}
-      -t ${CONTAINER_BUILD_IMAGE}
-      -t ${CONTAINER_BUILD_LATEST} > ${LOG_FILE} 2>&1;
+      -t ${CONTAINER_BUILD_IMAGE} > ${LOG_FILE} 2>&1;
     - echo "[CI] Logging into docker"
     - echo "${REGISTRY_PASSWORD}" | docker login ${REGISTRY} -u ${REGISTRY_USER} --password-stdin
     - echo "[CI] Publishing docker image"
