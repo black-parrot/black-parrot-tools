@@ -48,7 +48,8 @@ stages:
   artifacts:
     when: always
     paths:
-      - ${LOG_FILE}
+      - *.log
+      - *.cmd
 
 ###################################################
 ## Creating the docker images
