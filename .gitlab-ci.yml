@@ -162,7 +162,7 @@ repo:
       optional: true
   image:
     name: "${CONTAINER_BUILD_IMAGE}"
-    entrypoint: [""]
+    #entrypoint: [""]
   variables:
     # GitLab variables
     GIT_STRATEGY: "fetch"
