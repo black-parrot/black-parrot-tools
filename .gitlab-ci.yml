@@ -1,28 +1,20 @@
 
 variables:
-  # GitLab variables
-  GIT_CLONE_PATH: "${CI_BUILDS_DIR}/${CI_PROJECT_NAME}-${CI_COMMIT_SHA}" # Build directory shared for a commit
-  GIT_STRATEGY: "none"
-  GIT_SUBMODULE_STRATEGY: "none"
-  GIT_CHECKOUT: "false"
-  GIT_CLEAN_FLAGS: "none"
-  # performance
-  FF_USE_FASTZIP: "true"
-  ARTIFACT_COMPRESSION_LEVEL: "fastest"
-  CACHE_COMPRESSION_LEVEL: "fastest"
-  # work around for https://gitlab.com/gitlab-org/gitlab/-/issues/386967
-  GIT_CONFIG_COUNT: 1
-  GIT_CONFIG_KEY_0: "safe.directory"
-  GIT_CONFIG_VALUE_0: "*"
-  # Other varibles
-  USER_NAME: "${CI_USER_NAME}"
-  USER_ID: "${CI_USER_ID}"
-  GROUP_NAME: "${CI_GROUP_NAME}"
-  GROUP_ID: "${CI_GROUP_ID}"
-  OTHER_GROUPS: "${CI_OTHER_GROUPS}"
-  CORES_PER_JOB: "${CI_CORES_PER_JOB}"
-  MAX_CORES: "${CI_MAX_CORES}"
-  # Automatic GitLab variables
+  #########################################
+  # BSG Variables
+  #########################################
+  USER_NAME: "${BSG_CI_USER_NAME}"
+  USER_ID: "${BSG_CI_USER_ID}"
+  GROUP_NAME: "${BSG_CI_GROUP_NAME}"
+  GROUP_ID: "${BSG_CI_GROUP_ID}"
+  OTHER_GROUPS: "${BSG_CI_OTHER_GROUPS}"
+  CORES_PER_JOB: "${BSG_CI_CORES_PER_JOB}"
+  MAX_CORES: "${BSG_CI_MAX_CORES}"
+  #########################################
+  # GitLab Variables
+  #########################################
+  # Automatic
+  BUILDS: "${CI_BUILDS_DIR}"
   BRANCH: "${CI_COMMIT_REF_SLUG}"
   SHA: "${CI_COMMIT_SHA}"
   REGISTRY: "${CI_REGISTRY}"
@@ -34,6 +26,44 @@ variables:
   REPO_NAME: "${CI_PROJECT_NAME}"
   JOB_NAME: "${CI_JOB_NAME_SLUG}"
   CACHE_KEY: "${REPO_NAME}-${BRANCH}" # Cache per-branch
+  # Clone logic
+  GIT_CLONE_PATH: "${BUILDS}/${REPO_NAME}-${SHA}" # Build directory shared for a commit
+  GIT_STRATEGY: "none"
+  GIT_SUBMODULE_STRATEGY: "none"
+  GIT_CHECKOUT: "false"
+  GIT_CLEAN_FLAGS: "none"
+  # workaround for https://gitlab.com/gitlab-org/gitlab/-/issues/386967
+  GIT_CONFIG_COUNT: 1
+  GIT_CONFIG_KEY_0: "safe.directory"
+  GIT_CONFIG_VALUE_0: "*"
+  # Performance flags
+  FF_USE_FASTZIP: "true"
+  ARTIFACT_COMPRESSION_LEVEL: "fastest"
+  CACHE_COMPRESSION_LEVEL: "fastest"
+
+undef_job:
+  - if: $USER_NAME == null
+  - if: $USER_ID == null
+  - if: $GROUP_NAME == null
+  - if: $GROUP_ID == null
+  - if: $OTHER_GROUPS == null
+  - if: $CORES_PER_JOB == null
+  - if: $MAX_CORES == null
+  - if: $BUILDS == null
+  - if: $BRANCH == null
+  - if: $SHA == null
+  - if: $REGISTRY == null
+  - if: $REGISTRY_USER == null
+  - if: $REGISTRY_IMAGE == null
+  - if: $REGISTRY_PASSWORD == null
+  - if: $HASH == null
+  - if: $REPO_URL == null
+  - if: $REPO_NAME == null
+  - if: $JOB_NAME == null
+  - if: $CACHE_KEY == null
+  script:
+    - echo "[CI] Variable is not defined"
+    - exit 1
 
 stages:
   - docker
@@ -48,8 +78,8 @@ stages:
   artifacts:
     when: always
     paths:
-      - *.log
-      - *.cmd
+      - "*.log"
+      - "*.cmd"
 
 ###################################################
 ## Creating the docker images
@@ -82,14 +112,7 @@ stages:
     - echo "[CI] Checking docker"
     - docker version
     - echo "[CI] Building docker image"
-    - echo "docker build docker/ -f docker/Dockerfile.${DOCKER_PLATFORM}
-      --build-arg USER_NAME=${USER_NAME}
-      --build-arg USER_ID=${USER_ID}
-      --build-arg GROUP_NAME=${GROUP_NAME}
-      --build-arg GROUP_ID=${GROUP_ID}
-      --build-arg OTHER_GROUPS=${OTHER_GROUPS}
-      -t ${CONTAINER_BUILD_IMAGE} > ${LOG_FILE} 2>&1;" >> docker.cmd
-    - docker build docker/ -f docker/Dockerfile.${DOCKER_PLATFORM}
+    - docker build -f Dockerfile.${DOCKER_PLATFORM}
       --build-arg USER_NAME=${USER_NAME}
       --build-arg USER_ID=${USER_ID}
       --build-arg GROUP_NAME=${GROUP_NAME}
