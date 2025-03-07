@@ -178,7 +178,7 @@ build-image-centos7:
     CONTAINER_BUILD_TYPE: "repo"
   script:
     - echo "[CI] Populating docker image with repo"
-    - echo "[CI] TODO: Actually do this..."
+    - echo "[CI] TODO Actually do this..."
     - docker tag ${CONTAINER_IMAGE_BASE} ${CONTAINER_IMAGE_SHA}
 
 repo-image-centos7:
