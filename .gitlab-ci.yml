@@ -112,10 +112,15 @@ undef_job:
     GIT_CLEAN_FLAGS: "-ffdx"
     # Globals
     CONTAINER_BUILD_IMAGE: "${REGISTRY_IMAGE}:build-${DOCKER_PLATFORM}-${SHA}"
+    CONTAINER_LATEST_IMAGE: "${REGISTRY_IMAGE}:latest"
   script:
-    - echo "[CI] Checking docker"
+    - echo "[CI] Checking docker version"
     - docker version
+    - echo "[CI] Logging into docker registry"
+    - echo "${REGISTRY_PASSWORD}" | docker login ${REGISTRY} -u ${REGISTRY_USER} --password-stdin
     - echo "[CI] Building docker image"
+    - docker pull ${CONTAINER_LATEST_IMAGE}
+    - echo "[CI] Pulling latest image"
     - docker build docker -f docker/Dockerfile.${DOCKER_PLATFORM}
       --build-arg USER_NAME="${USER_NAME}"
       --build-arg USER_ID="${USER_ID}"
@@ -123,10 +128,10 @@ undef_job:
       --build-arg GROUP_ID="${GROUP_ID}"
       --build-arg OTHER_GROUPS="${OTHER_GROUPS}"
       -t ${CONTAINER_BUILD_IMAGE} > ${LOG_FILE} 2>&1;
-    - echo "[CI] Logging into docker"
-    - echo "${REGISTRY_PASSWORD}" | docker login ${REGISTRY} -u ${REGISTRY_USER} --password-stdin
-    - echo "[CI] Publishing docker image"
+    - docker tag ${CONTAINER_BUILD_IMAGE} ${CONTAINER_LATEST_IMAGE}
+    - echo "[CI] Publishing docker images"
     - docker push ${CONTAINER_BUILD_IMAGE}
+    - docker push ${CONTAINER_LATEST_IMAGE}
   tags: # Use shared gitlab runner
     - saas-linux-small-amd64
 
