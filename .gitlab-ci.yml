@@ -120,10 +120,10 @@ undef_job:
     - echo "${REGISTRY_PASSWORD}" | docker login ${REGISTRY} -u ${REGISTRY_USER} --password-stdin
     - echo "[CI] Checking for latest docker image"
     - if docker manifest inspect $REGISTRY_IMAGE:latest > /dev/null 2>&1; then
-        echo "[CI] $REGISTRY_IMAGE:latest exists, pulling..."
-        docker pull ${CONTAINER_LATEST_IMAGE}
+        echo "[CI] $REGISTRY_IMAGE:latest exists, pulling...";
+        docker pull ${CONTAINER_LATEST_IMAGE};
       else
-        echo "$REGISTRY_IMAGE:latest does not exist, starting from scratch"
+        echo "$REGISTRY_IMAGE:latest does not exist, starting from scratch";
       fi
     - echo "[CI] Building docker image"
     - docker build docker -f docker/Dockerfile.${DOCKER_PLATFORM}
