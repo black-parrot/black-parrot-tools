@@ -112,7 +112,7 @@ undef_job:
     GIT_CLEAN_FLAGS: "-ffdx"
     # Globals
     CONTAINER_BUILD_IMAGE: "${REGISTRY_IMAGE}:build-${DOCKER_PLATFORM}-${SHA}"
-    CONTAINER_LATEST_IMAGE: "${REGISTRY_IMAGE}:latest"
+    CONTAINER_LATEST_IMAGE: "${REGISTRY_IMAGE}:build-${DOCKER_PLATFORM}-latest"
   script:
     - echo "[CI] Checking docker version"
     - docker version
