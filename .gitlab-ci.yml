@@ -26,19 +26,11 @@ variables:
   REPO_NAME: "${CI_PROJECT_NAME}"
   JOB_NAME: "${CI_JOB_NAME_SLUG}"
   CACHE_KEY: "${REPO_NAME}-${BRANCH}" # Cache per-branch
-  # Disable git clone by default
-  GIT_STRATEGY: "none"
-  GIT_FETCH_EXTRA_FLAGS: "--prune --progress --no-tags"
-  GIT_SUBMODULE_STRATEGY: "none"
-  GIT_SUBMODULE_UPDATE_FLAGS: "--jobs ${BSG_CI_MAX_CORES} --recommend-shallow"
-  GIT_CHECKOUT: "true"
-  GIT_CLEAN_FLAGS: "-ffdx"
-  GIT_CLONE_PATH: "${BUILDS}/${REPO_NAME}-${SHA}" # Clone per-commit
   # workaround for https://gitlab.com/gitlab-org/gitlab/-/issues/386967
   GIT_CONFIG_COUNT: 1
   GIT_CONFIG_KEY_0: "safe.directory"
   GIT_CONFIG_VALUE_0: "*"
-  # Performance flags
+  # Performance flags https://docs.gitlab.com/runner/configuration/feature-flags/
   FF_USE_FASTZIP: "true"
   ARTIFACT_COMPRESSION_LEVEL: "fastest"
   CACHE_COMPRESSION_LEVEL: "fastest"
@@ -78,7 +70,37 @@ undef_job:
 ###################################################
 ## Base Job Template
 ###################################################
+
+.centos7_template:
+  variables: { DOCKER_PLATFORM : "centos7" }
+
+.ubuntu2404_template:
+  variables: { DOCKER_PLATFORM: "ubuntu24.04" }
+
+.no_clone_template:
+  variables:
+    # Don't fetch anything
+    GIT_STRATEGY: "none"
+    GIT_SUBMODULE_STRATEGY: "none"
+
+.fetch_template:
+  variables:
+    # Fetch just the docker file
+    GIT_STRATEGY: "fetch"
+    GIT_FETCH_EXTRA_FLAGS: "--prune --progress --no-tags"
+    GIT_SUBMODULE_STRATEGY: "none"
+
+.full_clone_template:
+  variables:
+    # Do a full clone
+    GIT_STRATEGY: "clone"
+    GIT_FETCH_EXTRA_FLAGS: "--prune --progress --no-tags"
+    GIT_SUBMODULE_STRATEGY: "recursive"
+    GIT_SUBMODULE_UPDATE_FLAGS: "--jobs ${BSG_CI_MAX_CORES} --recommend-shallow"
+    GIT_CLONE_PATH: "${BUILDS}/${REPO_NAME}-${SHA}" # Clone per-commit
+
 .job_template:
+  extends: .no_clone_template
   variables:
     LOG_FILE: "${JOB_NAME}.log"
     CONTAINER_BASE_TYPE: "setme"
@@ -97,23 +119,9 @@ undef_job:
 ## https://docs.gitlab.com/ee/user/packages/container_registry/build_and_push_images.html
 .image_template:
   stage: docker
-  #rules:
-  #  - changes:
-  #    - "Makefile.common"
-  #    - "Makefile.env"
-  #    - "mk/Makefile.docker"
-  #    - "docker/requirements.txt"
-  #    - "docker/Dockerfile.${DOCKER_PLATFORM}"
-  #    - "docker/entrypoint.${DOCKER_PLATFORM}.sh"
-  extends: .job_template
-  image:
-    name: docker:24.0.5
-  services:
-    - docker:dind
-  variables:
-    # Fetch just the docker file
-    GIT_STRATEGY: "fetch"
-    GIT_SUBMODULE_STRATEGY: "none"
+  extends: [ .job_template, .fetch_template ]
+  image: { name: docker:24.0.5 }
+  services: [ docker:dind ]
   before_script:
     - echo "[CI] Checking docker version"
     - docker version
@@ -132,14 +140,19 @@ undef_job:
     - echo "[CI] Publishing docker images"
     - docker push ${CONTAINER_IMAGE_SHA}
     - docker push ${CONTAINER_IMAGE_LATEST}
-  tags: # Use shared gitlab runner
-    - saas-linux-small-amd64
+  tags: [ saas-linux-small-amd64 ] # Use shared gitlab runner
+  #rules:
+  #  - changes:
+  #    - "Makefile.common"
+  #    - "Makefile.env"
+  #    - "mk/Makefile.docker"
+  #    - "docker/requirements.txt"
+  #    - "docker/Dockerfile.${DOCKER_PLATFORM}"
+  #    - "docker/entrypoint.${DOCKER_PLATFORM}.sh"
 
 .build_image_template:
   extends: .image_template
-  variables:
-    CONTAINER_BASE_TYPE: "build"
-    CONTAINER_BUILD_TYPE: "build"
+  variables: { CONTAINER_BASE_TYPE: "build", CONTAINER_BUILD_TYPE: "build" }
   script:
     - echo "[CI] Building base docker image (with prereqs)"
     - docker build docker -f docker/Dockerfile.${DOCKER_PLATFORM}
@@ -150,46 +163,25 @@ undef_job:
       --build-arg OTHER_GROUPS="${OTHER_GROUPS}"
       -t ${CONTAINER_IMAGE_SHA} > ${LOG_FILE} 2>&1
 
-.centos7_template:
-  variables:
-    DOCKER_PLATFORM : "centos7"
-
-.ubuntu2404_template:
-  variables:
-    DOCKER_PLATFORM : "ubuntu24.04"
-
 build-image-ubuntu2404:
-  extends:
-    - .build_image_template
-    - .ubuntu2404_template
+  extends: [.build_image_template, .ubuntu2404_template]
 
 build-image-centos7:
-  extends:
-    - .build_image_template
-    - .centos7_template
+  extends: [.build_image_template, .centos7_template]
 
 .repo_image_template:
-  extends: .image_template
-  variables:
-    # Clone the repo now
-    GIT_STRATEGY: "clone"
-    GIT_SUBMODULE_STRATEGY: "recursive"
-    CONTAINER_BASE_TYPE: "build"
-    CONTAINER_BUILD_TYPE: "repo"
+  extends: [ .image_template, .full_clone_template ]
+  variables: { CONTAINER_BASE_TYPE: "build", CONTAINER_BUILD_TYPE: "repo" }
   script:
     - echo "[CI] Populating docker image with repo"
     - echo "[CI] TODO Actually do this..."
     - docker tag ${CONTAINER_IMAGE_BASE} ${CONTAINER_IMAGE_SHA}
 
 repo-image-centos7:
-  extends:
-    - .repo_image_template
-    - .centos7_template
+  extends: [.repo_image_template, .centos7_template]
 
 repo-image-ubuntu2404:
-  extends:
-    - .repo_image_template
-    - .ubuntu2404_template
+  extends: [.repo_image_template, .ubuntu2404_template]
 
 #  script:
 #    - echo "[CI] Populating docker image with repo"
@@ -253,5 +245,6 @@ repo-image-ubuntu2404:
 #    # Fails on first build attempt
 #    @$(MAKE) build.bsg_sv2v || $(MAKE) build.bsg_sv2v
 #    @$(MAKE) build.bsg_fakeram
+
 
 
