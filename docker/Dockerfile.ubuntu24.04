@@ -47,7 +47,7 @@ ARG OTHER_GROUPS
 RUN getent group $GROUP_ID || groupadd --gid $GROUP_ID $GROUP_NAME
 
 # Use --no-log-init to deal with large userids creating giant log files
-RUN useradd --no-log-init --uid $USER_ID --gid $GROUP_ID --shell /bin/bash --no-log-init $USER_NAME
+RUN useradd --no-log-init --uid $USER_ID --gid $GROUP_ID --shell /bin/bash --create-home $USER_NAME
 
 # Add the user to other groups
 RUN for gid in ${OTHER_GROUPS}; do \
@@ -57,7 +57,7 @@ RUN for gid in ${OTHER_GROUPS}; do \
     done
 
 # Sets working directory
-WORKDIR /$USER_NAME
+WORKDIR /home/$USER_NAME
 
 # Create directory for extra installation
 RUN mkdir -p /opt && chgrp $GROUP_NAME /opt && chmod 775 /opt
