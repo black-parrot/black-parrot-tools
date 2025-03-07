@@ -116,7 +116,14 @@ undef_job:
     - echo "[CI] Checking docker"
     - docker version
     - echo "[CI] Building docker image"
-    - docker build -f Dockerfile.${DOCKER_PLATFORM}
+    - echo "docker build docker -f Dockerfile.${DOCKER_PLATFORM}
+      --build-arg USER_NAME=${USER_NAME}
+      --build-arg USER_ID=${USER_ID}
+      --build-arg GROUP_NAME=${GROUP_NAME}
+      --build-arg GROUP_ID=${GROUP_ID}
+      --build-arg OTHER_GROUPS=${OTHER_GROUPS}
+      -t ${CONTAINER_BUILD_IMAGE}" >> docker.cmd
+    - docker build docker -f Dockerfile.${DOCKER_PLATFORM}
       --build-arg USER_NAME=${USER_NAME}
       --build-arg USER_ID=${USER_ID}
       --build-arg GROUP_NAME=${GROUP_NAME}
