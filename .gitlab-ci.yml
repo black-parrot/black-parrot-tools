@@ -118,9 +118,14 @@ undef_job:
     - docker version
     - echo "[CI] Logging into docker registry"
     - echo "${REGISTRY_PASSWORD}" | docker login ${REGISTRY} -u ${REGISTRY_USER} --password-stdin
+    - echo "[CI] Checking for latest docker image"
+    - if docker manifest inspect $REGISTRY_IMAGE:latest > /dev/null 2>&1; then
+        echo "[CI] $REGISTRY_IMAGE:latest exists, pulling..."
+        docker pull ${CONTAINER_LATEST_IMAGE}
+      else
+        echo "$REGISTRY_IMAGE:latest does not exist, starting from scratch"
+      fi
     - echo "[CI] Building docker image"
-    - docker pull ${CONTAINER_LATEST_IMAGE}
-    - echo "[CI] Pulling latest image"
     - docker build docker -f docker/Dockerfile.${DOCKER_PLATFORM}
       --build-arg USER_NAME="${USER_NAME}"
       --build-arg USER_ID="${USER_ID}"
