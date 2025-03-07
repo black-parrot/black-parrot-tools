@@ -41,33 +41,37 @@ variables:
   ARTIFACT_COMPRESSION_LEVEL: "fastest"
   CACHE_COMPRESSION_LEVEL: "fastest"
 
-undef_job:
-  - if: $USER_NAME == null
-  - if: $USER_ID == null
-  - if: $GROUP_NAME == null
-  - if: $GROUP_ID == null
-  - if: $OTHER_GROUPS == null
-  - if: $CORES_PER_JOB == null
-  - if: $MAX_CORES == null
-  - if: $BUILDS == null
-  - if: $BRANCH == null
-  - if: $SHA == null
-  - if: $REGISTRY == null
-  - if: $REGISTRY_USER == null
-  - if: $REGISTRY_IMAGE == null
-  - if: $REGISTRY_PASSWORD == null
-  - if: $HASH == null
-  - if: $REPO_URL == null
-  - if: $REPO_NAME == null
-  - if: $JOB_NAME == null
-  - if: $CACHE_KEY == null
-  script:
-    - echo "[CI] Variable is not defined"
-    - exit 1
-
 stages:
+  - validate
   - docker
   - repo
+
+# Check for variables to make sure this is a sane configuration
+undef_job:
+  stage: validate
+  rules:
+    - if: $USER_NAME == null
+    - if: $USER_ID == null
+    - if: $GROUP_NAME == null
+    - if: $GROUP_ID == null
+    - if: $OTHER_GROUPS == null
+    - if: $CORES_PER_JOB == null
+    - if: $MAX_CORES == null
+    - if: $BUILDS == null
+    - if: $BRANCH == null
+    - if: $SHA == null
+    - if: $REGISTRY == null
+    - if: $REGISTRY_USER == null
+    - if: $REGISTRY_IMAGE == null
+    - if: $REGISTRY_PASSWORD == null
+    - if: $HASH == null
+    - if: $REPO_URL == null
+    - if: $REPO_NAME == null
+    - if: $JOB_NAME == null
+    - if: $CACHE_KEY == null
+  script:
+      - echo "[CI] Variable is not defined"
+      - exit 1
 
 ###################################################
 ## Base Job Template
@@ -186,4 +190,5 @@ repo:
 #    # Fails on first build attempt
 #    @$(MAKE) build.bsg_sv2v || $(MAKE) build.bsg_sv2v
 #    @$(MAKE) build.bsg_fakeram
+
 
