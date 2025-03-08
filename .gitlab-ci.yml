@@ -130,7 +130,6 @@ check-job:
       - "docker/Dockerfile.${DOCKER_PLATFORM}"
       - "docker/entrypoint.${DOCKER_PLATFORM}.sh"
   before_script:
-    - echo "[CI-DEBUG] FORCE_REBUILD == $FORCE_REBUILD"
     - echo "[CI] Checking docker version"
     - docker version
     - echo "[CI] Logging into docker registry"
@@ -181,15 +180,19 @@ check-job:
     - echo "[CI] Committing changes to container"
     - docker commit ${CONTAINER_EXEC} ${CONTAINER_IMAGE_SHA}
     - echo "[CI] Shutting down container"
+    - docker stop ${CONTAINER_EXEC}
+    - echo "[CI] Deleting container"
     - docker rm ${CONTAINER_EXEC}
 
 ###################################################
 ## Creating and populating the docker images
 ###################################################
 build-image-ubuntu2404:
+  rules: !reference [.image_template, rules]
   extends: [.build_image_template, .ubuntu2404_mixin]
 
 build-image-centos7:
+  rules: !reference [.image_template, rules]
   extends: [.build_image_template, .centos7_mixin]
 
 repo-image-ubuntu2404:
