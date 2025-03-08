@@ -1,7 +1,7 @@
 
 variables:
   #########################################
-  # BSG Variables
+  # Required BSG Variables
   #########################################
   USER_NAME: "${BSG_CI_USER_NAME}"
   USER_ID: "${BSG_CI_USER_ID}"
@@ -10,6 +10,9 @@ variables:
   OTHER_GROUPS: "${BSG_CI_OTHER_GROUPS}"
   CORES_PER_JOB: "${BSG_CI_CORES_PER_JOB}"
   MAX_CORES: "${BSG_CI_MAX_CORES}"
+  #########################################
+  # Optional BSG Variables
+  #########################################
   FORCE_REBUILD: "${BSG_CI_FORCE_REBUILD}"
   #########################################
   # GitLab Variables
@@ -26,8 +29,6 @@ variables:
   REPO_URL: "${CI_REPOSITORY_URL}"
   REPO_NAME: "${CI_PROJECT_NAME}"
   JOB_NAME: "${CI_JOB_NAME_SLUG}"
-  CACHE_KEY: "${REPO_NAME}-${BRANCH}" # Cache per-branch
-  CLONE_PATH: "${BUILDS}/${REPO_NAME}-${SHA}" # Clone per-commit
   # workaround for https://gitlab.com/gitlab-org/gitlab/-/issues/386967
   GIT_CONFIG_COUNT: 1
   GIT_CONFIG_KEY_0: "safe.directory"
@@ -36,6 +37,11 @@ variables:
   FF_USE_FASTZIP: "true"
   ARTIFACT_COMPRESSION_LEVEL: "fastest"
   CACHE_COMPRESSION_LEVEL: "fastest"
+  #########################################
+  # Generated Global Variables
+  #########################################
+  CACHE_KEY: "${REPO_NAME}-${BRANCH}" # Cache per-branch
+  CLONE_PATH: "${BUILDS}/${REPO_NAME}-${SHA}" # Clone per-commit
 
 stages:
   - validate
@@ -64,15 +70,13 @@ undef_job:
     - if: $REPO_URL == null
     - if: $REPO_NAME == null
     - if: $JOB_NAME == null
-    - if: $CACHE_KEY == null
   script:
       - echo "[CI] Variable is not defined"
       - exit 1
 
 ###################################################
-## Base Job Template
+## Job Templates
 ###################################################
-
 .centos7_template:
   variables: { DOCKER_PLATFORM : "centos7" }
 
@@ -116,9 +120,6 @@ undef_job:
     paths:
       - "*.log"
 
-###################################################
-## Creating the docker images
-###################################################
 ## https://docs.gitlab.com/ee/user/packages/container_registry/build_and_push_images.html
 .image_template:
   stage: docker
@@ -145,14 +146,11 @@ undef_job:
     - docker push ${CONTAINER_IMAGE_LATEST}
   tags: [ saas-linux-small-amd64 ] # Use shared gitlab runner
   rules:
-    - if: $FORCE_REBUILD != ""
-    - changes:
-      - "Makefile.common"
-      - "Makefile.env"
-      - "mk/Makefile.docker"
-      - "docker/requirements.txt"
-      - "docker/Dockerfile.${DOCKER_PLATFORM}"
-      - "docker/entrypoint.${DOCKER_PLATFORM}.sh"
+    - if: $FORCE_REBUILD == null
+      changes:
+        - "docker/requirements.txt"
+        - "docker/Dockerfile.${DOCKER_PLATFORM}"
+        - "docker/entrypoint.${DOCKER_PLATFORM}.sh"
 
 .build_image_template:
   extends: .image_template
@@ -187,6 +185,9 @@ undef_job:
     - echo "[CI] Shutting down container"
     - docker rm ${CONTAINER_EXEC}
 
+###################################################
+## Creating and populating the docker images
+###################################################
 build-image-ubuntu2404:
   extends: [.build_image_template, .ubuntu2404_template]
 
@@ -200,61 +201,4 @@ repo-image-ubuntu2404:
 repo-image-centos7:
   extends: [.repo_image_template, .centos7_template]
   needs: [ {job: "build-image-centos7", optional: true} ]
-
-###################################################
-## Build Job Template
-###################################################
-#.build_template:
-#  extends: .job_template
-#  variables:
-#    CONTAINER_REPO_IMAGE: "${REGISTRY_IMAGE}:${DOCKER_PLATFORM}-repo-${SHA}"
-#    CONTAINER_REPO_LATEST: "${REGISTRY_IMAGE}:${DOCKER_PLATFORM}-repo-latest"
-#  artifacts:
-#    # TODO: reduce size
-#    when: always
-#    #when: success
-#    paths:
-#      - "install/"
-
-###################################################
-## Creating the ${REPO_NAME} repo
-###################################################
-#repo:
-#  stage: repo
-#  extends: .build_template
-#  needs:
-#    - job: "build-image-centos7"
-#      optional: true
-#  image:
-#    name: "${CONTAINER_BUILD_IMAGE}"
-#  script:
-#    - echo "[CI] Doing checkout...";
-#    - make -j ${MAX_CORES} checkout >> ${LOG_FILE} 2>&1;
-#    - echo "[CI] Applying patches...";
-#    - make -j ${MAX_CORES} apply_patches >> ${LOG_FILE} 2>&1;
-
-#
-#
-#tools_lite: ## minimal set of simulation tools
-#tools_lite: apply_patches
-#    @$(MAKE) build.boost
-#    @$(MAKE) build.verilator
-#    @$(MAKE) build.dromajo
-#
-#tools: ## standard tools
-#tools: tools_lite
-#    @$(MAKE) build.spike
-#    @$(MAKE) build.surelog
-#    @$(MAKE) build.yosys
-#    @$(MAKE) build.yslang
-#    @$(MAKE) build.axe
-#
-#tools_bsg: ## Additional tools for BSG users
-#tools_bsg: tools
-#    # Fails on first build attempt
-#    @$(MAKE) build.bsg_sv2v || $(MAKE) build.bsg_sv2v
-#    @$(MAKE) build.bsg_fakeram
-
-
-
 
