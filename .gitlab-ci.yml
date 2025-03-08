@@ -127,9 +127,10 @@ check-job:
     - if: $FORCE_REBUILD
       when: always
     - changes:
-      - "docker/requirements.txt"
-      - "docker/Dockerfile.${DOCKER_PLATFORM}"
-      - "docker/entrypoint.${DOCKER_PLATFORM}.sh"
+        paths:
+          - "docker/requirements.txt"
+          - "docker/Dockerfile.${DOCKER_PLATFORM}"
+          - "docker/entrypoint.${DOCKER_PLATFORM}.sh"
   before_script:
     - echo "[CI] Checking docker version"
     - docker version
