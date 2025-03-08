@@ -146,11 +146,12 @@ undef_job:
     - docker push ${CONTAINER_IMAGE_LATEST}
   tags: [ saas-linux-small-amd64 ] # Use shared gitlab runner
   rules:
-    - if: $FORCE_REBUILD == null
-      changes:
-        - "docker/requirements.txt"
-        - "docker/Dockerfile.${DOCKER_PLATFORM}"
-        - "docker/entrypoint.${DOCKER_PLATFORM}.sh"
+    - if: $FORCE_REBUILD
+      when: always
+    - changes:
+      - "docker/requirements.txt"
+      - "docker/Dockerfile.${DOCKER_PLATFORM}"
+      - "docker/entrypoint.${DOCKER_PLATFORM}.sh"
 
 .build_image_template:
   extends: .image_template
