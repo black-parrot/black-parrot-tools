@@ -44,7 +44,7 @@ variables:
   CLONE_PATH: "${REPO_NAME}-${SHA}" # Clone per-commit
 
 # Check for variables to make sure this is a sane configuration
-undef_job:
+check-job:
   stage: .pre
   rules:
     - if: $USER_NAME == null
@@ -72,26 +72,26 @@ undef_job:
 ###################################################
 ## Job Templates
 ###################################################
-.centos7_template:
+.centos7_mixin:
   variables: { DOCKER_PLATFORM : "centos7" }
 
-.ubuntu2404_template:
+.ubuntu2404_mixin:
   variables: { DOCKER_PLATFORM: "ubuntu24.04" }
 
-.no_clone_template:
+.no_clone_mixin:
   variables:
     # Don't fetch anything
     GIT_STRATEGY: "none"
     GIT_SUBMODULE_STRATEGY: "none"
 
-.fetch_template:
+.fetch_mixin:
   variables:
     # Fetch just the docker file
     GIT_STRATEGY: "fetch"
     GIT_FETCH_EXTRA_FLAGS: "--prune --progress --no-tags"
     GIT_SUBMODULE_STRATEGY: "none"
 
-.full_clone_template:
+.full_clone_mixin:
   variables:
     # Do a full clone
     GIT_STRATEGY: "clone"
@@ -100,7 +100,8 @@ undef_job:
     GIT_SUBMODULE_UPDATE_FLAGS: "--jobs ${BSG_CI_MAX_CORES} --recommend-shallow"
 
 .job_template:
-  extends: .no_clone_template
+  extends: .no_clone_mixin
+  needs: [ {job: "check-job", optional: true} ]
   variables:
     LOG_FILE: "${JOB_NAME}.log"
     CONTAINER_BASE_TYPE: "setme"
@@ -117,7 +118,7 @@ undef_job:
 
 ## https://docs.gitlab.com/ee/user/packages/container_registry/build_and_push_images.html
 .image_template:
-  extends: [ .job_template, .fetch_template ]
+  extends: [ .job_template, .fetch_mixin ]
   image: { name: docker:24.0.5 }
   services: [ docker:dind ]
   tags: [ saas-linux-small-amd64 ] # Use shared gitlab runner
@@ -129,6 +130,7 @@ undef_job:
       - "docker/Dockerfile.${DOCKER_PLATFORM}"
       - "docker/entrypoint.${DOCKER_PLATFORM}.sh"
   before_script:
+    - echo "[CI-DEBUG] FORCE_REBUILD == $FORCE_REBUILD"
     - echo "[CI] Checking docker version"
     - docker version
     - echo "[CI] Logging into docker registry"
@@ -163,7 +165,7 @@ undef_job:
       -t ${CONTAINER_IMAGE_SHA} > ${LOG_FILE} 2>&1
 
 .repo_image_template:
-  extends: [ .image_template, .no_clone_template ]
+  extends: [ .image_template, .no_clone_mixin ]
   variables: { CONTAINER_BASE_TYPE: "build", CONTAINER_BUILD_TYPE: "repo" }
   script:
     - echo "[CI] Starting background container"
@@ -185,16 +187,16 @@ undef_job:
 ## Creating and populating the docker images
 ###################################################
 build-image-ubuntu2404:
-  extends: [.build_image_template, .ubuntu2404_template]
+  extends: [.build_image_template, .ubuntu2404_mixin]
 
 build-image-centos7:
-  extends: [.build_image_template, .centos7_template]
+  extends: [.build_image_template, .centos7_mixin]
 
 repo-image-ubuntu2404:
-  extends: [.repo_image_template, .ubuntu2404_template]
+  extends: [.repo_image_template, .ubuntu2404_mixin]
   needs: [ {job: "build-image-ubuntu2404", optional: true} ]
 
 repo-image-centos7:
-  extends: [.repo_image_template, .centos7_template]
+  extends: [.repo_image_template, .centos7_mixin]
   needs: [ {job: "build-image-centos7", optional: true} ]
 
