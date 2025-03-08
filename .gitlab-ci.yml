@@ -177,7 +177,7 @@ check-job:
     - echo "[CI] Sanity checks"
     - ${DOCKER_BASH} -c "pwd && ls && ls * && echo ${CLONE_PATH}"
     - echo "[CI] Checking out ${SHA}"
-    - ${DOCKER_BASH} -c "git -C ${CLONE_PATH} checkout ${SHA}"
+    - ${DOCKER_BASH} -c "cd ${CLONE_PATH} && git checkout ${SHA}"
     - echo "[CI] Checking out submodules"
     - ${DOCKER_BASH} -c "make -j${MAX_CORES} -C ${CLONE_PATH} checkout"
     - echo "[CI] Applying patches to submodules"
