@@ -171,7 +171,7 @@ check-job:
     - echo "[CI] Starting background container"
     - docker run -d --name ${CONTAINER_EXEC} ${CONTAINER_IMAGE_BASE} tail -f /dev/null
     - echo "[CI] Cloning repo"
-    - ${DOCKER_BASH} -c "git clone --prune --progress --no-tags ${REPO_URL} ${CLONE_PATH}"
+    - ${DOCKER_BASH} -c "git clone --progress --no-tags ${REPO_URL} ${CLONE_PATH}"
     - echo "[CI] Sanity checks"
     - ${DOCKER_BASH} -c "pwd && ls && ls * && echo ${CLONE_PATH}"
     - echo "[CI] Checking out ${SHA}"
