@@ -26,6 +26,7 @@ variables:
   REPO_NAME: "${CI_PROJECT_NAME}"
   JOB_NAME: "${CI_JOB_NAME_SLUG}"
   CACHE_KEY: "${REPO_NAME}-${BRANCH}" # Cache per-branch
+  CLONE_PATH: "${BUILDS}/${REPO_NAME}-${SHA}" # Clone per-commit
   # workaround for https://gitlab.com/gitlab-org/gitlab/-/issues/386967
   GIT_CONFIG_COUNT: 1
   GIT_CONFIG_KEY_0: "safe.directory"
@@ -97,7 +98,6 @@ undef_job:
     GIT_FETCH_EXTRA_FLAGS: "--prune --progress --no-tags"
     GIT_SUBMODULE_STRATEGY: "recursive"
     GIT_SUBMODULE_UPDATE_FLAGS: "--jobs ${BSG_CI_MAX_CORES} --recommend-shallow"
-    GIT_CLONE_PATH: "${BUILDS}/${REPO_NAME}-${SHA}" # Clone per-commit
 
 .job_template:
   extends: .no_clone_template
@@ -109,6 +109,7 @@ undef_job:
     CONTAINER_IMAGE_BASE  : "${CONTAINER_IMAGE}-${CONTAINER_BASE_TYPE}-latest"
     CONTAINER_IMAGE_SHA: "${CONTAINER_IMAGE}-${CONTAINER_BUILD_TYPE}-${SHA}"
     CONTAINER_IMAGE_LATEST: "${CONTAINER_IMAGE}-${CONTAINER_BUILD_TYPE}-latest"
+    CONTAINER_EXEC: "run-${CONTAINER_BUILD_TYPE}"
   artifacts:
     when: always
     paths:
@@ -171,27 +172,32 @@ build-image-centos7:
   extends: [.build_image_template, .centos7_template]
 
 .repo_image_template:
-  extends: [ .image_template, .full_clone_template ]
+  extends: [ .image_template, .no_clone_template ]
   variables: { CONTAINER_BASE_TYPE: "build", CONTAINER_BUILD_TYPE: "repo" }
   script:
-    - echo "[CI] Populating docker image with repo"
-    - echo "[CI] TODO Actually do this..."
-    - docker tag ${CONTAINER_IMAGE_BASE} ${CONTAINER_IMAGE_SHA}
+    - echo "[CI] Pulling base image"
+    - docker pull ${CONTAINER_IMAGE_BASE}
+    - echo "[CI] Starting background container"
+    - docker run -d --name ${CONTAINER_EXEC} ${CONTAINER_IMAGE_BASE} tail -f /dev/null
+    - echo "[CI] Cloning repo"
+    - docker exec ${CONTAINER_EXEC} git clone ${REPO_URL} ${CLONE_PATH}
+    - docker exec ${CONTAINER_EXEC} cd ${CLONE_PATH}
+    - docker exec ${CONTAINER_EXEC} git checkout ${SHA}
+    - echo "[CI] Sanity check"
+    - docker exec ${CONTAINER_EXEC} pwd
+    - docker exec ${CONTAINER_EXEC} ls
+    - echo "[CI] Committing changes to container"
+    - docker commit ${CONTAINER_EXEC} ${CONTAINER_IMAGE_SHA}
+    - echo "[CI] Shutting down container"
+    - docker rm ${CONTAINER_EXEC}
 
 repo-image-centos7:
+  needs: build-image-centos7
   extends: [.repo_image_template, .centos7_template]
 
 repo-image-ubuntu2404:
+  needs: build-image-ubuntu2404
   extends: [.repo_image_template, .ubuntu2404_template]
-
-#  script:
-#    - echo "[CI] Populating docker image with repo"
-#    - docker pull ${CONTAINER_IMAGE_BASE}
-#    - echo "[CI] Doing checkout...";
-#    - make -j ${MAX_CORES} checkout >> ${LOG_FILE} 2>&1;
-#    - echo "[CI] Applying patches...";
-#    - make -j ${MAX_CORES} apply_patches >> ${LOG_FILE} 2>&1;
-
 
 ###################################################
 ## Build Job Template
