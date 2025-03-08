@@ -10,6 +10,7 @@ variables:
   OTHER_GROUPS: "${BSG_CI_OTHER_GROUPS}"
   CORES_PER_JOB: "${BSG_CI_CORES_PER_JOB}"
   MAX_CORES: "${BSG_CI_MAX_CORES}"
+  FORCE_REBUILD: "${BSG_CI_FORCE_REBUILD}"
   #########################################
   # GitLab Variables
   #########################################
@@ -143,14 +144,16 @@ undef_job:
     - docker push ${CONTAINER_IMAGE_SHA}
     - docker push ${CONTAINER_IMAGE_LATEST}
   tags: [ saas-linux-small-amd64 ] # Use shared gitlab runner
-  #rules:
-  #  - changes:
-  #    - "Makefile.common"
-  #    - "Makefile.env"
-  #    - "mk/Makefile.docker"
-  #    - "docker/requirements.txt"
-  #    - "docker/Dockerfile.${DOCKER_PLATFORM}"
-  #    - "docker/entrypoint.${DOCKER_PLATFORM}.sh"
+  rules:
+    - if: ${FORCE_REBUILD} != ""
+      when: always
+    - changes:
+      - "Makefile.common"
+      - "Makefile.env"
+      - "mk/Makefile.docker"
+      - "docker/requirements.txt"
+      - "docker/Dockerfile.${DOCKER_PLATFORM}"
+      - "docker/entrypoint.${DOCKER_PLATFORM}.sh"
 
 .build_image_template:
   extends: .image_template
@@ -192,12 +195,12 @@ build-image-centos7:
     - docker rm ${CONTAINER_EXEC}
 
 repo-image-centos7:
-  needs: build-image-centos7
   extends: [.repo_image_template, .centos7_template]
+  needs: [ {job: "build-image-centos7", optional: true} ]
 
 repo-image-ubuntu2404:
-  needs: build-image-ubuntu2404
   extends: [.repo_image_template, .ubuntu2404_template]
+  needs: [ {job: "build-image-ubuntu2404", optional: true} ]
 
 ###################################################
 ## Build Job Template
@@ -252,6 +255,7 @@ repo-image-ubuntu2404:
 #    # Fails on first build attempt
 #    @$(MAKE) build.bsg_sv2v || $(MAKE) build.bsg_sv2v
 #    @$(MAKE) build.bsg_fakeram
+
 
 
 
