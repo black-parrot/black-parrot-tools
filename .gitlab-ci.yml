@@ -145,8 +145,7 @@ undef_job:
     - docker push ${CONTAINER_IMAGE_LATEST}
   tags: [ saas-linux-small-amd64 ] # Use shared gitlab runner
   rules:
-    - if: ${FORCE_REBUILD} != ""
-      when: always
+    - if: $FORCE_REBUILD != ""
     - changes:
       - "Makefile.common"
       - "Makefile.env"
@@ -168,12 +167,6 @@ undef_job:
       --build-arg OTHER_GROUPS="${OTHER_GROUPS}"
       -t ${CONTAINER_IMAGE_SHA} > ${LOG_FILE} 2>&1
 
-build-image-ubuntu2404:
-  extends: [.build_image_template, .ubuntu2404_template]
-
-build-image-centos7:
-  extends: [.build_image_template, .centos7_template]
-
 .repo_image_template:
   extends: [ .image_template, .no_clone_template ]
   variables: { CONTAINER_BASE_TYPE: "build", CONTAINER_BUILD_TYPE: "repo" }
@@ -194,13 +187,19 @@ build-image-centos7:
     - echo "[CI] Shutting down container"
     - docker rm ${CONTAINER_EXEC}
 
-repo-image-centos7:
-  extends: [.repo_image_template, .centos7_template]
-  needs: [ {job: "build-image-centos7", optional: true} ]
+build-image-ubuntu2404:
+  extends: [.build_image_template, .ubuntu2404_template]
+
+build-image-centos7:
+  extends: [.build_image_template, .centos7_template]
 
 repo-image-ubuntu2404:
   extends: [.repo_image_template, .ubuntu2404_template]
   needs: [ {job: "build-image-ubuntu2404", optional: true} ]
+
+repo-image-centos7:
+  extends: [.repo_image_template, .centos7_template]
+  needs: [ {job: "build-image-centos7", optional: true} ]
 
 ###################################################
 ## Build Job Template
