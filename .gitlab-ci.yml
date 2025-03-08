@@ -41,7 +41,7 @@ variables:
   # Generated Global Variables
   #########################################
   CACHE_KEY: "${REPO_NAME}-${BRANCH}" # Cache per-branch
-  CLONE_PATH: "${BUILDS}/${REPO_NAME}-${SHA}" # Clone per-commit
+  CLONE_PATH: "${REPO_NAME}-${SHA}" # Clone per-commit
 
 stages:
   - validate
