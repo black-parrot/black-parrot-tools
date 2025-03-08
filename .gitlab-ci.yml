@@ -43,14 +43,9 @@ variables:
   CACHE_KEY: "${REPO_NAME}-${BRANCH}" # Cache per-branch
   CLONE_PATH: "${REPO_NAME}-${SHA}" # Clone per-commit
 
-stages:
-  - validate
-  - docker
-  - repo
-
 # Check for variables to make sure this is a sane configuration
 undef_job:
-  stage: validate
+  stage: .pre
   rules:
     - if: $USER_NAME == null
     - if: $USER_ID == null
@@ -122,7 +117,6 @@ undef_job:
 
 ## https://docs.gitlab.com/ee/user/packages/container_registry/build_and_push_images.html
 .image_template:
-  stage: docker
   extends: [ .job_template, .fetch_template ]
   image: { name: docker:24.0.5 }
   services: [ docker:dind ]
