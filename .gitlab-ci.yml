@@ -171,13 +171,13 @@ check-job:
     - echo "[CI] Starting background container"
     - docker run -d --name ${CONTAINER_EXEC} ${CONTAINER_IMAGE_BASE} tail -f /dev/null
     - echo "[CI] Cloning repo"
-    - docker exec ${CONTAINER_EXEC} git clone ${REPO_URL} ${CLONE_PATH}
+    - docker exec ${CONTAINER_EXEC} /bin/bash -c "git clone ${REPO_URL} ${CLONE_PATH}"
     - echo "[CI] Checking out ${SHA}"
     - docker exec ${CONTAINER_EXEC} /bin/bash -c "cd ${CLONE_PATH} && git checkout ${SHA}"
     - echo "[CI] Sanity check"
-    - docker exec ${CONTAINER_EXEC} pwd
-    - docker exec ${CONTAINER_EXEC} ls
-    - docker exec ${CONTAINER_EXEC} ls *
+    - docker exec ${CONTAINER_EXEC} /bin/bash -c "pwd"
+    - docker exec ${CONTAINER_EXEC} /bin/bash -c "ls"
+    - docker exec ${CONTAINER_EXEC} /bin/bash -c "ls *"
     - echo "[CI] Committing changes to container"
     - docker commit ${CONTAINER_EXEC} ${CONTAINER_IMAGE_SHA}
     - echo "[CI] Shutting down container"
