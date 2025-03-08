@@ -176,6 +176,8 @@ check-job:
     - ${DOCKER_BASH} -c "git clone --progress ${REPO_URL} ${CLONE_PATH}"
     - echo "[CI] Sanity checks"
     - ${DOCKER_BASH} -c "pwd && ls && ls * && echo ${CLONE_PATH}"
+    - echo "[CI] Versions"
+    - ${DOCKER_BASH} -c "gcc --version && git --version && python --version && python3 --version"
     - echo "[CI] Checking out ${SHA}"
     - ${DOCKER_BASH} -c "cd ${CLONE_PATH} && git checkout ${SHA}"
     - echo "[CI] Checking out submodules"
