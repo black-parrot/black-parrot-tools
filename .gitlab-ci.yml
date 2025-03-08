@@ -42,6 +42,7 @@ variables:
   #########################################
   CACHE_KEY: "${REPO_NAME}-${BRANCH}" # Cache per-branch
   CLONE_PATH: "${REPO_NAME}-${SHA}" # Clone per-commit
+  DOCKER_BASH: "docker exec ${CONTAINER_EXEC} /bin/bash"
 
 # Check for variables to make sure this is a sane configuration
 check-job:
@@ -97,7 +98,7 @@ check-job:
     GIT_STRATEGY: "clone"
     GIT_FETCH_EXTRA_FLAGS: "--prune --progress --no-tags"
     GIT_SUBMODULE_STRATEGY: "recursive"
-    GIT_SUBMODULE_UPDATE_FLAGS: "--jobs ${BSG_CI_MAX_CORES} --recommend-shallow"
+    GIT_SUBMODULE_UPDATE_FLAGS: "--jobs ${MAX_CORES} --recommend-shallow"
 
 .job_template:
   extends: .no_clone_mixin
@@ -170,13 +171,15 @@ check-job:
     - echo "[CI] Starting background container"
     - docker run -d --name ${CONTAINER_EXEC} ${CONTAINER_IMAGE_BASE} tail -f /dev/null
     - echo "[CI] Cloning repo"
-    - docker exec ${CONTAINER_EXEC} /bin/bash -c "git clone ${REPO_URL} ${CLONE_PATH}"
+    - ${DOCKER_BASH} -c "git clone --prune --progress --no-tags ${REPO_URL} ${CLONE_PATH}"
+    - echo "[CI] Sanity checks"
+    - ${DOCKER_BASH} -c "pwd && ls && ls * && echo ${CLONE_PATH}"
     - echo "[CI] Checking out ${SHA}"
-    - docker exec ${CONTAINER_EXEC} /bin/bash -c "cd ${CLONE_PATH} && git checkout ${SHA}"
-    - echo "[CI] Sanity check"
-    - docker exec ${CONTAINER_EXEC} /bin/bash -c "pwd"
-    - docker exec ${CONTAINER_EXEC} /bin/bash -c "ls"
-    - docker exec ${CONTAINER_EXEC} /bin/bash -c "ls *"
+    - ${DOCKER_BASH} -c "git -C ${CLONE_PATH} checkout ${SHA}"
+    - echo "[CI] Checking out submodules"
+    - ${DOCKER_BASH} -c "make -j${MAX_CORES} -C ${CLONE_PATH} checkout"
+    - echo "[CI] Applying patches to submodules"
+    - ${DOCKER_BASH} -c "make -j${MAX_CORES} -C ${CLONE_PATH} apply_patches"
     - echo "[CI] Committing changes to container"
     - docker commit ${CONTAINER_EXEC} ${CONTAINER_IMAGE_SHA}
     - echo "[CI] Shutting down container"
