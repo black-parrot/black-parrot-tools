@@ -158,6 +158,7 @@ check-job:
   script:
     - echo "[CI] Building base docker image (with prereqs)"
     - docker build docker -f docker/Dockerfile.${DOCKER_PLATFORM}
+      --build-arg BUILDKIT_INLINE_CACHE=1 --cache-from ${CONTAINER_IMAGE_LATEST}
       --build-arg USER_NAME="${USER_NAME}"
       --build-arg USER_ID="${USER_ID}"
       --build-arg GROUP_NAME="${GROUP_NAME}"
