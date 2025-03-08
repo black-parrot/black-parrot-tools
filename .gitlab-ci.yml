@@ -126,6 +126,14 @@ undef_job:
   extends: [ .job_template, .fetch_template ]
   image: { name: docker:24.0.5 }
   services: [ docker:dind ]
+  tags: [ saas-linux-small-amd64 ] # Use shared gitlab runner
+  rules:
+    - if: $FORCE_REBUILD
+      when: always
+    - changes:
+      - "docker/requirements.txt"
+      - "docker/Dockerfile.${DOCKER_PLATFORM}"
+      - "docker/entrypoint.${DOCKER_PLATFORM}.sh"
   before_script:
     - echo "[CI] Checking docker version"
     - docker version
@@ -141,17 +149,11 @@ undef_job:
   after_script:
     - echo "[CI] Updating latest docker tag"
     - docker tag ${CONTAINER_IMAGE_SHA} ${CONTAINER_IMAGE_LATEST}
+    - echo "[CI] Logging into docker registry"
+    - echo "${REGISTRY_PASSWORD}" | docker login ${REGISTRY} -u ${REGISTRY_USER} --password-stdin
     - echo "[CI] Publishing docker images"
     - docker push ${CONTAINER_IMAGE_SHA}
     - docker push ${CONTAINER_IMAGE_LATEST}
-  tags: [ saas-linux-small-amd64 ] # Use shared gitlab runner
-  rules:
-    - if: $FORCE_REBUILD
-      when: always
-    - changes:
-      - "docker/requirements.txt"
-      - "docker/Dockerfile.${DOCKER_PLATFORM}"
-      - "docker/entrypoint.${DOCKER_PLATFORM}.sh"
 
 .build_image_template:
   extends: .image_template
@@ -170,8 +172,6 @@ undef_job:
   extends: [ .image_template, .no_clone_template ]
   variables: { CONTAINER_BASE_TYPE: "build", CONTAINER_BUILD_TYPE: "repo" }
   script:
-    - echo "[CI] Pulling base image"
-    - docker pull ${CONTAINER_IMAGE_BASE}
     - echo "[CI] Starting background container"
     - docker run -d --name ${CONTAINER_EXEC} ${CONTAINER_IMAGE_BASE} tail -f /dev/null
     - echo "[CI] Cloning repo"
