@@ -171,7 +171,9 @@ check-job:
   variables: { CONTAINER_BASE_TYPE: "build", CONTAINER_BUILD_TYPE: "repo" }
   script:
     - echo "[CI] Starting background container"
-    - docker run -d --name ${CONTAINER_EXEC} ${CONTAINER_IMAGE_BASE} tail -f /dev/null
+    - docker run -d --name ${CONTAINER_EXEC} ${CONTAINER_IMAGE_BASE} bash -c "tail -f /dev/null"
+    - echo "[CI] Checking logs"
+    - docker logs ${CONTAINER_EXEC}
     - echo "[CI] Cloning repo"
     - ${DOCKER_BASH} -c "git clone --progress ${REPO_URL} ${CLONE_PATH}"
     - echo "[CI] Sanity checks"
