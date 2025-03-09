@@ -75,10 +75,10 @@ variables:
     GIT_SUBMODULE_UPDATE_FLAGS: "--jobs ${MAX_CORES} --recommend-shallow"
 
 .vanilla_mixin:
-  image: { name: alpine/git:v2.47.2, entrypoint: [""] }
+  image: { name: "alpine/git:v2.47.2", entrypoint: [""] }
 
 .dind_mixin:
-  image: [ docker:24.0.5 ]
+  image: [ name: "docker:24.0.5" ]
   services: [ docker:dind ]
   tags: [ saas-linux-small-amd64 ] # Use shared gitlab runner
 
