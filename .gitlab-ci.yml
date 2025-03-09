@@ -125,7 +125,7 @@ variables:
     BASE_IMAGE: "${CONTAINER_IMAGE_RAW}"
     CONTAINER_IMAGE: "${CONTAINER_IMAGE_RAW}"
   script:
-    - echo "[CI] Building image ${CURRENT_IMAGE}"
+    - echo "[CI] Building image ${CONTAINER_IMAGE}"
     - >
       docker build docker -f docker/Dockerfile.${DOCKER_PLATFORM}
       --build-arg BUILDKIT_INLINE_CACHE=1 --cache-from ${CONTAINER_IMAGE_RAW}
@@ -134,7 +134,7 @@ variables:
       --build-arg GROUP_NAME="${GROUP_NAME}"
       --build-arg GROUP_ID="${GROUP_ID}"
       --build-arg OTHER_GROUPS="${OTHER_GROUPS}"
-      -t ${CURRENT_IMAGE} > ${LOG_FILE} 2>&1
+      -t ${CONTAINER_IMAGE} > ${LOG_FILE} 2>&1
 
 .repo_image_template:
   extends: [ .image_template, .no_clone_mixin ]
