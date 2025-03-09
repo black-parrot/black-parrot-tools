@@ -169,15 +169,15 @@ variables:
     - echo "[CI] Deleting container"
     - docker rm ${DOCKER_NAME}
 
-.build_image_template:
-  extends: [ .image_template, .no_clone_mixin ]
-  image: { name: "${CONTAINER_IMAGE_REPO}" }
-  script:
-      - make -j${CORES_PER_JOB} -C ${CLONE_PATH} build.boost
-  artifacts:
-    when: on_success
-    paths:
-      - ${CLONE_PATH}/install
+#.build_image_template:
+#  extends: [ .image_template, .no_clone_mixin ]
+#  image: { name: "${CONTAINER_IMAGE_REPO}" }
+#  script:
+#      - make -j${CORES_PER_JOB} -C ${CLONE_PATH} build.boost
+#  artifacts:
+#    when: on_success
+#    paths:
+#      - ${CLONE_PATH}/install
 
 ###################################################
 ## Creating and populating the docker images
@@ -185,17 +185,16 @@ variables:
 test-job:
   extends: [.image_template, .ubuntu2404_build_mixin]
   script:
-    - env
-
+    - env > ${LOG_FILE} 2>&1
   
-#raw-image-ubuntu2404:
-#  extends: [.raw_image_template, .ubuntu2404_build_mixin]
+raw-image-ubuntu2404:
+  extends: [.raw_image_template, .ubuntu2404_build_mixin]
+  #rules: !reference [.image_template, rules]
+
+raw-image-centos7:
+  extends: [.raw_image_template, .centos7_mixin]
 #  rules: !reference [.image_template, rules]
-#
-#raw-image-centos7:
-#  extends: [.raw_image_template, .centos7_mixin]
-#  rules: !reference [.image_template, rules]
-#
+
 #repo-image-ubuntu2404:
 #  extends: [.repo_image_template, .ubuntu2404_build_mixin]
 #  needs: [ { job: raw-image-ubuntu2404, optional: true } ]
