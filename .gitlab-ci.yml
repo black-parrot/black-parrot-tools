@@ -14,6 +14,7 @@ variables:
   # Optional BSG Variables
   #########################################
   FORCE_REBUILD: "${BSG_CI_FORCE_REBUILD}"
+  FORCE_SKIP_REBUILD: "${BSG_CI_FORCE_SKIP_REBUILD}"
   #########################################
   # GitLab Variables
   #########################################
@@ -134,6 +135,8 @@ check-job:
   rules:
     - if: $FORCE_REBUILD
       when: always
+    - if: $FORCE_SKIP_REBUILD
+      when: never
     - changes:
         paths:
           - "docker/requirements.txt"
@@ -207,14 +210,10 @@ check-job:
 build-image-ubuntu2404:
   rules: !reference [.image_template, rules]
   extends: [.build_image_template, .ubuntu2404_mixin]
-  # TODO: Skip build
-  when: never
 
 build-image-centos7:
   rules: !reference [.image_template, rules]
   extends: [.build_image_template, .centos7_mixin]
-  # TODO: Skip build
-  when: never
 
 repo-image-ubuntu2404:
   extends: [.repo_image_template, .ubuntu2404_mixin]
