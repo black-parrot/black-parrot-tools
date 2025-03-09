@@ -43,41 +43,18 @@ variables:
   #########################################
   CACHE_KEY: "${REPO_NAME}-${BRANCH}" # Cache per-branch
   CLONE_PATH: "${REPO_NAME}-${SHA}" # Clone per-commit
-  #########################################
-  # Constants that shouldn't be constants 
-  #########################################
-  DOCKER_ENTRYPOINT: "/usr/bin/entrypoint.sh"
-  #########################################
-  # Convenient Commands
-  #########################################
-  DOCKER_LAUNCH: "docker run -d --name ${CONTAINER_EXEC} ${CONTAINER_IMAGE_BASE} /bin/bash"
-  DOCKER_EXEC: "docker exec ${CONTAINER_EXEC} ${DOCKER_ENTRYPOINT} /bin/bash"
 
-# Check for variables to make sure this is a sane configuration
-check-job:
+###################################################
+## Basic Setup
+###################################################
+env-setup:
   stage: .pre
-  rules:
-    - if: $USER_NAME == null
-    - if: $USER_ID == null
-    - if: $GROUP_NAME == null
-    - if: $GROUP_ID == null
-    - if: $OTHER_GROUPS == null
-    - if: $CORES_PER_JOB == null
-    - if: $MAX_CORES == null
-    - if: $BUILDS == null
-    - if: $BRANCH == null
-    - if: $SHA == null
-    - if: $REGISTRY == null
-    - if: $REGISTRY_USER == null
-    - if: $REGISTRY_IMAGE == null
-    - if: $REGISTRY_PASSWORD == null
-    - if: $HASH == null
-    - if: $REPO_URL == null
-    - if: $REPO_NAME == null
-    - if: $JOB_NAME == null
   script:
-      - echo "[CI] Variable is not defined"
-      - exit 1
+    - echo "PREVIOUS_SHA=$(git rev parse HEAD^)" | tee -a $GITLAB_ENV >> build.env
+    - echo "CURRENT_SHA=$(git rev parse HEAD)" | tee -a $GITLAB_ENV >> build.env
+  artifacts:
+    reports:
+      dotenv: build.env
 
 ###################################################
 ## Job Templates
@@ -109,18 +86,16 @@ check-job:
     GIT_SUBMODULE_STRATEGY: "recursive"
     GIT_SUBMODULE_UPDATE_FLAGS: "--jobs ${MAX_CORES} --recommend-shallow"
 
+.dind_mixin:
+  image: { name: docker:24.0.5 }
+  services: [ docker:dind ]
+  tags: [ saas-linux-small-amd64 ] # Use shared gitlab runner
+
 .job_template:
+  needs: [ env-setup ]
   extends: .no_clone_mixin
-  needs: [ {job: "check-job", optional: true} ]
   variables:
     LOG_FILE: "${JOB_NAME}.log"
-    CONTAINER_BASE_TYPE: "setme"
-    CONTAINER_BUILD_TYPE: "setme"
-    CONTAINER_IMAGE: "${REGISTRY_IMAGE}:${DOCKER_PLATFORM}"
-    CONTAINER_IMAGE_BASE  : "${CONTAINER_IMAGE}-${CONTAINER_BASE_TYPE}-latest"
-    CONTAINER_IMAGE_SHA: "${CONTAINER_IMAGE}-${CONTAINER_BUILD_TYPE}-${SHA}"
-    CONTAINER_IMAGE_LATEST: "${CONTAINER_IMAGE}-${CONTAINER_BUILD_TYPE}-latest"
-    CONTAINER_EXEC: "run-${CONTAINER_BUILD_TYPE}"
   artifacts:
     when: always
     paths:
@@ -129,9 +104,28 @@ check-job:
 ## https://docs.gitlab.com/ee/user/packages/container_registry/build_and_push_images.html
 .image_template:
   extends: [ .job_template, .fetch_mixin ]
-  image: { name: docker:24.0.5 }
-  services: [ docker:dind ]
-  tags: [ saas-linux-small-amd64 ] # Use shared gitlab runner
+  variables:
+    CONTAINER_ROOT: "${REGISTRY_IMAGE}:${DOCKER_PLATFORM}"
+    CONTAINER_IMAGE_RAW: "${CONTAINER_ROOT}-${CURRENT_SHA}-raw"
+    CONTAINER_IMAGE_REPO: "${CONTAINER_ROOT}-${CURRENT_SHA}-repo"
+    PREVIOUS_IMAGE_RAW: "${CONTAINER_ROOT}-${PREVIOUS_SHA}-raw"
+    PREVIOUS_IMAGE_REPO: "${CONTAINER_ROOT}-${PREVIOUS_SHA}-repo"
+  before_script:
+    - echo "[CI] Logging into docker registry"
+    - echo "${REGISTRY_PASSWORD}" | docker login ${REGISTRY} -u ${REGISTRY_USER} --password-stdin
+    - echo "[CI] Checking for previous docker image: ${BASE_IMAGE}"
+    - |
+      if docker manifest inspect ${BASE_IMAGE} > /dev/null 2>&1; then
+        echo "[CI] ${BASE_IMAGE} exists, pulling...";
+        docker pull ${BASE_IMAGE};
+      else
+        echo "[CI] ${BASE_IMAGE} does not exist, starting from scratch";
+      fi
+  after_script:
+    - echo "[CI] Logging into docker registry"
+    - echo "${REGISTRY_PASSWORD}" | docker login ${REGISTRY} -u ${REGISTRY_USER} --password-stdin
+    - echo "[CI] Publishing docker images"
+    - docker push ${CONTAINER_IMAGE}
   rules:
     - if: $FORCE_REBUILD
       when: always
@@ -142,49 +136,38 @@ check-job:
           - "docker/requirements.txt"
           - "docker/Dockerfile.${DOCKER_PLATFORM}"
           - "docker/entrypoint.${DOCKER_PLATFORM}.sh"
-  before_script:
-    - echo "[CI] Checking docker version"
-    - docker version
-    - echo "[CI] Logging into docker registry"
-    - echo "${REGISTRY_PASSWORD}" | docker login ${REGISTRY} -u ${REGISTRY_USER} --password-stdin
-    - echo "[CI] Checking for latest docker image"
-    - if docker manifest inspect ${CONTAINER_IMAGE_BASE} > /dev/null 2>&1; then
-        echo "[CI] ${CONTAINER_IMAGE_BASE} exists, pulling...";
-        docker pull ${CONTAINER_IMAGE_BASE};
-      else
-        echo "[CI] ${CONTAINER_IMAGE_BASE} does not exist, starting from scratch";
-      fi
-  after_script:
-    - echo "[CI] Updating latest docker tag"
-    - docker tag ${CONTAINER_IMAGE_SHA} ${CONTAINER_IMAGE_LATEST}
-    - echo "[CI] Logging into docker registry"
-    - echo "${REGISTRY_PASSWORD}" | docker login ${REGISTRY} -u ${REGISTRY_USER} --password-stdin
-    - echo "[CI] Publishing docker images"
-    - docker push ${CONTAINER_IMAGE_SHA}
-    - docker push ${CONTAINER_IMAGE_LATEST}
 
-.build_image_template:
-  extends: .image_template
-  variables: { CONTAINER_BASE_TYPE: "build", CONTAINER_BUILD_TYPE: "build" }
+.raw_image_template:
+  extends: [ .image_template, .dind_mixin, .fetch_mixin ]
+  variables:
+    BASE_IMAGE: "${PREVIOUS_IMAGE_RAW}"
+    CONTAINER_IMAGE: "${CONTAINER_IMAGE_RAW}"
   script:
-    - echo "[CI] Building base docker image (with prereqs)"
-    - docker build docker -f docker/Dockerfile.${DOCKER_PLATFORM}
-      --build-arg BUILDKIT_INLINE_CACHE=1 --cache-from ${CONTAINER_IMAGE_LATEST}
+    - echo "[CI] Building image ${CURRENT_IMAGE}"
+    - |
+      docker build docker -f docker/Dockerfile.${DOCKER_PLATFORM}
+      --build-arg BUILDKIT_INLINE_CACHE=1 --cache-from ${BASE_IMAGE}
       --build-arg USER_NAME="${USER_NAME}"
       --build-arg USER_ID="${USER_ID}"
       --build-arg GROUP_NAME="${GROUP_NAME}"
       --build-arg GROUP_ID="${GROUP_ID}"
       --build-arg OTHER_GROUPS="${OTHER_GROUPS}"
-      -t ${CONTAINER_IMAGE_SHA} > ${LOG_FILE} 2>&1
+      -t ${CURRENT_IMAGE} > ${LOG_FILE} 2>&1
 
 .repo_image_template:
-  extends: [ .image_template, .no_clone_mixin ]
-  variables: { CONTAINER_BASE_TYPE: "build", CONTAINER_BUILD_TYPE: "repo" }
+  extends: [ .image_template, .dind_mixin, .no_clone_mixin ]
+  variables:
+    BASE_IMAGE: "${CONTAINER_IMAGE_RAW}"
+    CONTAINER_IMAGE: "${CONTAINER_IMAGE_REPO}"
+    DOCKER_ENTRYPOINT: "/usr/bin/entrypoint.sh"
+    DOCKER_NAME: "run-container"
+    DOCKER_LAUNCH: "docker run -d --name ${DOCKER_NAME} ${BASE_IMAGE} /bin/bash"
+    DOCKER_EXEC: "docker exec ${DOCKER_NAME} ${DOCKER_ENTRYPOINT} /bin/bash"
   script:
     - echo "[CI] Starting background container"
     - ${DOCKER_LAUNCH} -c "tail -f /dev/null"
     - echo "[CI] Checking logs"
-    - docker logs ${CONTAINER_EXEC}
+    - docker logs ${DOCKER_NAME}
     - echo "[CI] Cloning repo"
     - ${DOCKER_EXEC} -c "git clone --progress ${REPO_URL} ${CLONE_PATH}"
     - echo "[CI] Sanity checks"
@@ -198,47 +181,53 @@ check-job:
     - echo "[CI] Applying patches to submodules"
     - ${DOCKER_EXEC} -c "make -j${MAX_CORES} -C ${CLONE_PATH} apply_patches"
     - echo "[CI] Committing changes to container"
-    - docker commit ${CONTAINER_EXEC} ${CONTAINER_IMAGE_SHA}
+    - docker commit ${DOCKER_NAME} ${CONTAINER_IMAGE}
     - echo "[CI] Shutting down container"
-    - docker stop ${CONTAINER_EXEC}
+    - docker stop ${DOCKER_NAME}
     - echo "[CI] Deleting container"
-    - docker rm ${CONTAINER_EXEC}
+    - docker rm ${DOCKER_NAME}
 
-###################################################
-## Creating and populating the docker images
-###################################################
-build-image-ubuntu2404:
-  rules: !reference [.image_template, rules]
-  extends: [.build_image_template, .ubuntu2404_build_mixin]
-  when: manual
-
-build-image-centos7:
-  rules: !reference [.image_template, rules]
-  extends: [.build_image_template, .centos7_mixin]
-  when: manual
-
-repo-image-ubuntu2404:
-  extends: [.repo_image_template, .ubuntu2404_build_mixin]
-  needs: [ {job: build-image-ubuntu2404, optional: true} ]
-  when: manual
-
-repo-image-centos7:
-  extends: [.repo_image_template, .centos7_mixin]
-  needs: [ {job: build-image-centos7, optional: true} ]
-  when: manual
-
-###################################################
-## Actually building tools
-###################################################
-build-boost-ubuntu2404:
-  extends: [.job_template, .no_clone_mixin]
-  needs: [ {job: repo-image-ubuntu2404, optional: true} ]
-  when: manual
-  image: { name: registry.gitlab.com/bespoke-silicon-group/black-parrot-tools:ubuntu2404-repo-latest }
+.build_image_template:
+  extends: [ .image_template, .no_clone_mixin ]
+  image: { name: "${CONTAINER_IMAGE_REPO}" }
   script:
-    - make -C ${CLONE_PATH} build.boost
+      - make -j${CORES_PER_JOB} -C ${CLONE_PATH} build.boost
   artifacts:
     when: on_success
     paths:
       - ${CLONE_PATH}/install
+
+###################################################
+## Creating and populating the docker images
+###################################################
+raw-image-ubuntu2404:
+  extends: [.build_image_template, .ubuntu2404_build_mixin]
+  rules: !reference [.image_template, rules]
+
+raw-image-centos7:
+  extends: [.build_image_template, .centos7_mixin]
+  rules: !reference [.image_template, rules]
+
+repo-image-ubuntu2404:
+  extends: [.repo_image_template, .ubuntu2404_build_mixin]
+  needs: [ {job: raw-image-ubuntu2404, optional: true} ]
+
+repo-image-centos7:
+  extends: [.repo_image_template, .centos7_mixin]
+  needs: [ {job: raw-image-centos7, optional: true} ]
+
+###################################################
+## Actually building tools
+###################################################
+#build-boost-ubuntu2404:
+#  extends: [.job_template, .no_clone_mixin]
+#  needs: [ {job: repo-image-ubuntu2404, optional: true} ]
+#  when: manual
+#  image: { name: ${CONTAINER_IMAGE_ROOT}-repo}
+#  script:
+#    - make -C ${CLONE_PATH} build.boost
+#  artifacts:
+#    when: on_success
+#    paths:
+#      - ${CLONE_PATH}/install
 
