@@ -93,10 +93,14 @@ variables:
 .setup_template:
   extends: [ .job_template ]
   stage: .pre
+  before_script:
+    - echo "[CI] Setting up dotenv..." >> ${LOG_FILE}
   artifacts:
     when: on_success
     reports:
       dotenv: build.env
+    paths:
+      - build.env
 
 ## https://docs.gitlab.com/ee/user/packages/container_registry/build_and_push_images.html
 .image_template:
