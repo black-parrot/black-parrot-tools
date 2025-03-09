@@ -85,7 +85,7 @@ check-job:
 .centos7_mixin:
   variables: { DOCKER_PLATFORM : "centos7" }
 
-.ubuntu2404_mixin:
+.ubuntu2404_build_mixin:
   variables: { DOCKER_PLATFORM: "ubuntu24.04" }
 
 .no_clone_mixin:
@@ -209,17 +209,36 @@ check-job:
 ###################################################
 build-image-ubuntu2404:
   rules: !reference [.image_template, rules]
-  extends: [.build_image_template, .ubuntu2404_mixin]
+  extends: [.build_image_template, .ubuntu2404_build_mixin]
+  when: manual
 
 build-image-centos7:
   rules: !reference [.image_template, rules]
   extends: [.build_image_template, .centos7_mixin]
+  when: manual
 
 repo-image-ubuntu2404:
-  extends: [.repo_image_template, .ubuntu2404_mixin]
+  extends: [.repo_image_template, .ubuntu2404_build_mixin]
   needs: [ {job: build-image-ubuntu2404, optional: true} ]
+  when: manual
 
 repo-image-centos7:
   extends: [.repo_image_template, .centos7_mixin]
   needs: [ {job: build-image-centos7, optional: true} ]
+  when: manual
+
+###################################################
+## Actually building tools
+###################################################
+build-boost-ubuntu2404:
+  extends: [.job_template, .no_clone_mixin]
+  needs: [ {job: repo-image-ubuntu2404, optional: true} ]
+  when: manual
+  image: { name: registry.gitlab.com/bespoke-silicon-group/black-parrot-tools:ubuntu2404-repo-latest }
+  script:
+    - make -C ${CLONE_PATH} build.boost
+  artifacts:
+    when: success
+    paths:
+      - ${CLONE_PATH}/install
 
