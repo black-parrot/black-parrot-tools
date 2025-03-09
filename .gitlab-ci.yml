@@ -91,7 +91,7 @@ variables:
       - "*.log"
 
 .setup_template:
-  extends: [.job_template]
+  extends: [ .job_template ]
   stage: .pre
   artifacts:
     when: on_success
@@ -200,8 +200,8 @@ variables:
 setup-dotenv:
   extends: [ .setup_template, .vanilla_mixin ]
   script:
-    - echo "PREVIOUS_SHA=$(git rev-parse HEAD^)" | tee -a $GITLAB_ENV >> build.env
-    - echo "CURRENT_SHA=$(git rev-parse HEAD)" | tee -a $GITLAB_ENV >> build.env
+    - echo "PREVIOUS_SHA=$(git rev-parse HEAD^)" >> build.env
+    - echo "CURRENT_SHA=$(git rev-parse HEAD)" >> build.env
 
 ###################################################
 ## Creating and populating the docker images
