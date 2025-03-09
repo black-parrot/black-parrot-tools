@@ -126,6 +126,7 @@ variables:
     CONTAINER_IMAGE: "${CONTAINER_IMAGE_RAW}"
   script:
     - echo "[CI] Building image ${CURRENT_IMAGE}"
+    - env > env.log 2>&1
     - |
       docker build docker -f docker/Dockerfile.${DOCKER_PLATFORM}
       --build-arg BUILDKIT_INLINE_CACHE=1 --cache-from ${CONTAINER_IMAGE_RAW}
