@@ -113,7 +113,7 @@ env-setup:
   before_script:
     - echo "[CI] Logging into docker registry"
     - echo "${REGISTRY_PASSWORD}" | docker login ${REGISTRY} -u ${REGISTRY_USER} --password-stdin
-    - echo "[CI] Checking for previous docker image: ${BASE_IMAGE}"
+    - echo "[CI] Checking for previous docker image ${BASE_IMAGE}"
     - |
       if docker manifest inspect ${BASE_IMAGE} > /dev/null 2>&1; then
         echo "[CI] ${BASE_IMAGE} exists, pulling...";
