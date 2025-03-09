@@ -78,7 +78,7 @@ variables:
   image: { name: "alpine/git:v2.47.2", entrypoint: [""] }
 
 .dind_mixin:
-  image: [ name: "docker:24.0.5" ]
+  image: { name: "docker:24.0.5" }
   services: [ docker:dind ]
   tags: [ saas-linux-small-amd64 ] # Use shared gitlab runner
 
@@ -208,12 +208,12 @@ setup-dotenv:
 ###################################################
 raw-image-ubuntu2404:
   extends: [.raw_image_template, .ubuntu2404_build_mixin]
-  needs: [ env-setup ]
+  needs: [ setup-dotenv ]
   rules: !reference [.image_template, rules]
 
 raw-image-centos7:
   extends: [.raw_image_template, .centos7_mixin]
-  needs: [ env-setup ]
+  needs: [ setup-dotenv ]
   rules: !reference [.image_template, rules]
 
 repo-image-ubuntu2404:
