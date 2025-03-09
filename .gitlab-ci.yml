@@ -182,7 +182,7 @@ check-job:
   variables: { CONTAINER_BASE_TYPE: "build", CONTAINER_BUILD_TYPE: "repo" }
   script:
     - echo "[CI] Starting background container"
-    - ${DOCKER_LAUNCH} tail -f /dev/null
+    - ${DOCKER_LAUNCH}
     - echo "[CI] Checking logs"
     - docker logs ${CONTAINER_EXEC}
     - echo "[CI] Cloning repo"
