@@ -49,6 +49,7 @@ variables:
 ###################################################
 env-setup:
   stage: .pre
+  image: { name: alpine/git:v2.47.2 }
   script:
     - echo "PREVIOUS_SHA=$(git rev parse HEAD^)" | tee -a $GITLAB_ENV >> build.env
     - echo "CURRENT_SHA=$(git rev parse HEAD)" | tee -a $GITLAB_ENV >> build.env
@@ -87,7 +88,6 @@ env-setup:
     GIT_SUBMODULE_UPDATE_FLAGS: "--jobs ${MAX_CORES} --recommend-shallow"
 
 .dind_mixin:
-  image: { name: docker:24.0.5 }
   services: [ docker:dind ]
   tags: [ saas-linux-small-amd64 ] # Use shared gitlab runner
 
