@@ -179,11 +179,10 @@ check-job:
   variables: { CONTAINER_BASE_TYPE: "build", CONTAINER_BUILD_TYPE: "repo" }
   script:
     - echo "[CI] Starting background container"
-    - ${DOCKER_LAUNCH} -c "tail -f /dev/null"
+    - ${DOCKER_LAUNCH} tail -f /dev/null
     - echo "[CI] Checking logs"
     - docker logs ${CONTAINER_EXEC}
     - echo "[CI] Cloning repo"
-    - echo "${DOCKER_EXEC}"
     - ${DOCKER_EXEC} git clone --progress ${REPO_URL} ${CLONE_PATH}
     - echo "[CI] Sanity checks"
     - ${DOCKER_EXEC} pwd && ls && ls * && echo ${CLONE_PATH}
@@ -208,16 +207,20 @@ check-job:
 build-image-ubuntu2404:
   rules: !reference [.image_template, rules]
   extends: [.build_image_template, .ubuntu2404_mixin]
+  # TODO: Skip build
+  when: never
 
 build-image-centos7:
   rules: !reference [.image_template, rules]
   extends: [.build_image_template, .centos7_mixin]
+  # TODO: Skip build
+  when: never
 
 repo-image-ubuntu2404:
   extends: [.repo_image_template, .ubuntu2404_mixin]
-  needs: [ {job: "build-image-ubuntu2404", optional: true} ]
+  needs: [ {job: build-image-ubuntu2404, optional: true} ]
 
 repo-image-centos7:
   extends: [.repo_image_template, .centos7_mixin]
-  needs: [ {job: "build-image-centos7", optional: true} ]
+  needs: [ {job: build-image-centos7, optional: true} ]
 
