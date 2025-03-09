@@ -238,7 +238,7 @@ build-boost-ubuntu2404:
   script:
     - make -C ${CLONE_PATH} build.boost
   artifacts:
-    when: success
+    when: on_success
     paths:
       - ${CLONE_PATH}/install
 
