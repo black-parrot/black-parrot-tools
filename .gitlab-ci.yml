@@ -183,6 +183,7 @@ check-job:
     - echo "[CI] Checking logs"
     - docker logs ${CONTAINER_EXEC}
     - echo "[CI] Cloning repo"
+    - echo "${DOCKER_EXEC}"
     - ${DOCKER_EXEC} git clone --progress ${REPO_URL} ${CLONE_PATH}
     - echo "[CI] Sanity checks"
     - ${DOCKER_EXEC} pwd && ls && ls * && echo ${CLONE_PATH}
