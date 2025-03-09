@@ -126,16 +126,16 @@ variables:
     CONTAINER_IMAGE: "${CONTAINER_IMAGE_RAW}"
   script:
     - echo "[CI] Building image ${CURRENT_IMAGE}"
-    - env > env.log 2>&1
-    - |
-      docker build docker -f docker/Dockerfile.${DOCKER_PLATFORM}
-      --build-arg BUILDKIT_INLINE_CACHE=1 --cache-from ${CONTAINER_IMAGE_RAW}
-      --build-arg USER_NAME="${USER_NAME}"
-      --build-arg USER_ID="${USER_ID}"
-      --build-arg GROUP_NAME="${GROUP_NAME}"
-      --build-arg GROUP_ID="${GROUP_ID}"
-      --build-arg OTHER_GROUPS="${OTHER_GROUPS}"
-      -t ${CURRENT_IMAGE} > ${LOG_FILE} 2>&1
+    - env > ${LOG_FILE} 2>&1
+#    - |
+#      docker build docker -f docker/Dockerfile.${DOCKER_PLATFORM}
+#      --build-arg BUILDKIT_INLINE_CACHE=1 --cache-from ${CONTAINER_IMAGE_RAW}
+#      --build-arg USER_NAME="${USER_NAME}"
+#      --build-arg USER_ID="${USER_ID}"
+#      --build-arg GROUP_NAME="${GROUP_NAME}"
+#      --build-arg GROUP_ID="${GROUP_ID}"
+#      --build-arg OTHER_GROUPS="${OTHER_GROUPS}"
+#      -t ${CURRENT_IMAGE} > ${LOG_FILE} 2>&1
 
 .repo_image_template:
   extends: [ .image_template, .no_clone_mixin ]
@@ -192,8 +192,8 @@ raw-image-ubuntu2404:
   extends: [.raw_image_template, .ubuntu2404_build_mixin]
   #rules: !reference [.image_template, rules]
 
-raw-image-centos7:
-  extends: [.raw_image_template, .centos7_mixin]
+# raw-image-centos7:
+# extends: [.raw_image_template, .centos7_mixin]
 #  rules: !reference [.image_template, rules]
 
 #repo-image-ubuntu2404:
