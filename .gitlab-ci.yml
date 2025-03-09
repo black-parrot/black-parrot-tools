@@ -48,10 +48,10 @@ variables:
 ## Job Templates
 ###################################################
 .centos7_mixin:
-  variables: { DOCKER_PLATFORM : "centos7" }
+  variables: {DOCKER_PLATFORM : "centos7"}
 
-.ubuntu2404_build_mixin:
-  variables: { DOCKER_PLATFORM: "ubuntu24.04" }
+.ubuntu2404_mixin:
+  variables: {DOCKER_PLATFORM: "ubuntu24.04"}
 
 .no_clone_mixin:
   variables:
@@ -75,8 +75,12 @@ variables:
     GIT_SUBMODULE_UPDATE_FLAGS: "--jobs ${MAX_CORES} --recommend-shallow"
 
 .job_template:
+  image: {name: "docker:24.0.5"}
   variables:
     LOG_FILE: "${JOB_NAME}.log"
+    CONTAINER_ROOT: "${REGISTRY_IMAGE}:${DOCKER_PLATFORM}"
+    CONTAINER_IMAGE_RAW: "${CONTAINER_ROOT}-raw"
+    CONTAINER_IMAGE_REPO: "${CONTAINER_ROOT}-repo"
   artifacts:
     when: always
     paths:
@@ -84,14 +88,9 @@ variables:
 
 ## https://docs.gitlab.com/ee/user/packages/container_registry/build_and_push_images.html
 .image_template:
-  extends: [ .job_template ]
-  image: { name: "docker:24.0.5" }
-  services: [ docker:dind ]
-  tags: [ saas-linux-small-amd64 ] # Use shared gitlab runner
-  variables:
-    CONTAINER_ROOT: "${REGISTRY_IMAGE}:${DOCKER_PLATFORM}"
-    CONTAINER_IMAGE_RAW: "${CONTAINER_ROOT}-raw"
-    CONTAINER_IMAGE_REPO: "${CONTAINER_ROOT}-repo"
+  extends: [.job_template]
+  services: [docker:dind]
+  tags: [saas-linux-small-amd64] # Use shared gitlab runner
   before_script:
     - echo "[CI] Logging into docker registry"
     - echo "${REGISTRY_PASSWORD}" | docker login ${REGISTRY} -u ${REGISTRY_USER} --password-stdin
@@ -120,7 +119,7 @@ variables:
           - "docker/entrypoint.${DOCKER_PLATFORM}.sh"
 
 .raw_image_template:
-  extends: [ .image_template, .fetch_mixin ]
+  extends: [.image_template, .fetch_mixin]
   variables:
     BASE_IMAGE: "${CONTAINER_IMAGE_RAW}"
     CONTAINER_IMAGE: "${CONTAINER_IMAGE_RAW}"
@@ -137,7 +136,7 @@ variables:
       -t ${CONTAINER_IMAGE} > ${LOG_FILE} 2>&1
 
 .repo_image_template:
-  extends: [ .image_template, .no_clone_mixin ]
+  extends: [.image_template, .no_clone_mixin]
   variables:
     BASE_IMAGE: "${CONTAINER_IMAGE_RAW}"
     CONTAINER_IMAGE: "${CONTAINER_IMAGE_REPO}"
@@ -169,43 +168,46 @@ variables:
     - echo "[CI] Deleting container"
     - docker rm ${DOCKER_NAME}
 
-#.build_image_template:
-#  extends: [ .image_template, .no_clone_mixin ]
-#  image: { name: "${CONTAINER_IMAGE_REPO}" }
-#  script:
-#      - make -j${CORES_PER_JOB} -C ${CLONE_PATH} build.boost
-#  artifacts:
-#    when: on_success
-#    paths:
-#      - ${CLONE_PATH}/install
+.build_template:
+  extends: [.job_template, .no_clone_mixin]
+  image: {name: "${CONTAINER_IMAGE_REPO}"}
+  artifacts:
+    when: on_success
+    paths:
+      - ${CLONE_PATH}/install
 
 ###################################################
 ## Creating and populating the docker images
 ###################################################
 raw-image-ubuntu2404:
-  extends: [.raw_image_template, .ubuntu2404_build_mixin]
+  extends: [.raw_image_template, .ubuntu2404_mixin]
   rules: !reference [.image_template, rules]
 
-raw-image-centos7:
-  extends: [.raw_image_template, .centos7_mixin]
-  rules: !reference [.image_template, rules]
+#raw-image-centos7:
+#  extends: [.raw_image_template, .centos7_mixin]
+#  rules: !reference [.image_template, rules]
 
 repo-image-ubuntu2404:
-  extends: [.repo_image_template, .ubuntu2404_build_mixin]
-  needs: [ { job: raw-image-ubuntu2404, optional: true } ]
+  extends: [.repo_image_template, .ubuntu2404_mixin]
+  needs: [{job: raw-image-ubuntu2404, optional: true}]
 
-repo-image-centos7:
-  extends: [.repo_image_template, .centos7_mixin]
-  needs: [ { job: raw-image-centos7, optional: true } ]
+#repo-image-centos7:
+#  extends: [.repo_image_template, .centos7_mixin]
+#  needs: [{job: raw-image-centos7, optional: true}]
+
+build-boost-ubuntu2404:
+  extends: [.build_template, .ubuntu2404_mixin]
+  script:
+    - make -j${CORES_PER_JOB} -C ${CLONE_PATH} build.boost
 
 ###################################################
 ## Actually building tools
 ###################################################
 #build-boost-ubuntu2404:
 #  extends: [.job_template, .no_clone_mixin]
-#  needs: [ {job: repo-image-ubuntu2404, optional: true} ]
+#  needs: [{job: repo-image-ubuntu2404, optional: true}]
 #  when: manual
-#  image: { name: ${CONTAINER_IMAGE_ROOT}-repo}
+#  image: {name: ${CONTAINER_IMAGE_ROOT}-repo}
 #  script:
 #    - make -C ${CLONE_PATH} build.boost
 #  artifacts:
