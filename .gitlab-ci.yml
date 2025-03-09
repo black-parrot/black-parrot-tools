@@ -74,14 +74,6 @@ variables:
     GIT_SUBMODULE_STRATEGY: "recursive"
     GIT_SUBMODULE_UPDATE_FLAGS: "--jobs ${MAX_CORES} --recommend-shallow"
 
-.vanilla_mixin:
-  image: { name: "alpine/git:v2.47.2", entrypoint: [""] }
-
-.dind_mixin:
-  image: { name: "docker:24.0.5" }
-  services: [ docker:dind ]
-  tags: [ saas-linux-small-amd64 ] # Use shared gitlab runner
-
 .job_template:
   variables:
     LOG_FILE: "${JOB_NAME}.log"
@@ -93,6 +85,9 @@ variables:
 ## https://docs.gitlab.com/ee/user/packages/container_registry/build_and_push_images.html
 .image_template:
   extends: [ .job_template ]
+  image: { name: "docker:24.0.5" }
+  services: [ docker:dind ]
+  tags: [ saas-linux-small-amd64 ] # Use shared gitlab runner
   variables:
     CONTAINER_ROOT: "${REGISTRY_IMAGE}:${DOCKER_PLATFORM}"
     CONTAINER_IMAGE_RAW: "${CONTAINER_ROOT}-raw"
@@ -125,7 +120,7 @@ variables:
           - "docker/entrypoint.${DOCKER_PLATFORM}.sh"
 
 .raw_image_template:
-  extends: [ .image_template, .dind_mixin, .fetch_mixin ]
+  extends: [ .image_template, .fetch_mixin ]
   variables:
     BASE_IMAGE: "${CONTAINER_IMAGE_RAW}"
     CONTAINER_IMAGE: "${CONTAINER_IMAGE_RAW}"
@@ -142,7 +137,7 @@ variables:
       -t ${CURRENT_IMAGE} > ${LOG_FILE} 2>&1
 
 .repo_image_template:
-  extends: [ .image_template, .dind_mixin, .no_clone_mixin ]
+  extends: [ .image_template, .no_clone_mixin ]
   variables:
     BASE_IMAGE: "${CONTAINER_IMAGE_RAW}"
     CONTAINER_IMAGE: "${CONTAINER_IMAGE_REPO}"
@@ -187,22 +182,28 @@ variables:
 ###################################################
 ## Creating and populating the docker images
 ###################################################
-raw-image-ubuntu2404:
-  extends: [.raw_image_template, .ubuntu2404_build_mixin]
-  rules: !reference [.image_template, rules]
+test-job:
+  extends: [.image_template, .ubuntu2404_build_mixin]
+  script:
+    - env
 
-raw-image-centos7:
-  extends: [.raw_image_template, .centos7_mixin]
-  rules: !reference [.image_template, rules]
-
-repo-image-ubuntu2404:
-  extends: [.repo_image_template, .ubuntu2404_build_mixin]
-  needs: [ { job: raw-image-ubuntu2404, optional: true } ]
-
-repo-image-centos7:
-  extends: [.repo_image_template, .centos7_mixin]
-  needs: [ { job: raw-image-centos7, optional: true } ]
-
+  
+#raw-image-ubuntu2404:
+#  extends: [.raw_image_template, .ubuntu2404_build_mixin]
+#  rules: !reference [.image_template, rules]
+#
+#raw-image-centos7:
+#  extends: [.raw_image_template, .centos7_mixin]
+#  rules: !reference [.image_template, rules]
+#
+#repo-image-ubuntu2404:
+#  extends: [.repo_image_template, .ubuntu2404_build_mixin]
+#  needs: [ { job: raw-image-ubuntu2404, optional: true } ]
+#
+#repo-image-centos7:
+#  extends: [.repo_image_template, .centos7_mixin]
+#  needs: [ { job: raw-image-centos7, optional: true } ]
+#
 ###################################################
 ## Actually building tools
 ###################################################
