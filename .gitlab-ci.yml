@@ -42,7 +42,15 @@ variables:
   #########################################
   CACHE_KEY: "${REPO_NAME}-${BRANCH}" # Cache per-branch
   CLONE_PATH: "${REPO_NAME}-${SHA}" # Clone per-commit
-  DOCKER_BASH: "docker exec ${CONTAINER_EXEC} /bin/bash"
+  #########################################
+  # Constants that shouldn't be constants 
+  #########################################
+  DOCKER_ENTRYPOINT: "/usr/bin/entrypoint.sh"
+  #########################################
+  # Convenient Commands
+  #########################################
+  DOCKER_LAUNCH: "docker run -d --name ${CONTAINER_EXEC} ${CONTAINER_IMAGE_BASE} tail -f /dev/null"
+  DOCKER_EXEC: "docker exec ${CONTAINER_EXEC} ${DOCKER_ENTRYPOINT}"
 
 # Check for variables to make sure this is a sane configuration
 check-job:
@@ -171,21 +179,21 @@ check-job:
   variables: { CONTAINER_BASE_TYPE: "build", CONTAINER_BUILD_TYPE: "repo" }
   script:
     - echo "[CI] Starting background container"
-    - docker run -d --name ${CONTAINER_EXEC} ${CONTAINER_IMAGE_BASE} bash -c "tail -f /dev/null"
+    - ${DOCKER_LAUNCH} -c "tail -f /dev/null"
     - echo "[CI] Checking logs"
     - docker logs ${CONTAINER_EXEC}
     - echo "[CI] Cloning repo"
-    - ${DOCKER_BASH} -c "git clone --progress ${REPO_URL} ${CLONE_PATH}"
+    - ${DOCKER_EXEC} git clone --progress ${REPO_URL} ${CLONE_PATH}
     - echo "[CI] Sanity checks"
-    - ${DOCKER_BASH} -c "pwd && ls && ls * && echo ${CLONE_PATH}"
+    - ${DOCKER_EXEC} pwd && ls && ls * && echo ${CLONE_PATH}
     - echo "[CI] Versions"
-    - ${DOCKER_BASH} -c "gcc --version && git --version && python --version && python3 --version"
+    - ${DOCKER_EXEC} gcc --version && git --version && python --version && python3 --version
     - echo "[CI] Checking out ${SHA}"
-    - ${DOCKER_BASH} -c "cd ${CLONE_PATH} && git checkout ${SHA}"
+    - ${DOCKER_EXEC} cd ${CLONE_PATH} && git checkout ${SHA}
     - echo "[CI] Checking out submodules"
-    - ${DOCKER_BASH} -c "make -j${MAX_CORES} -C ${CLONE_PATH} checkout"
+    - ${DOCKER_EXEC} make -j${MAX_CORES} -C ${CLONE_PATH} checkout
     - echo "[CI] Applying patches to submodules"
-    - ${DOCKER_BASH} -c "make -j${MAX_CORES} -C ${CLONE_PATH} apply_patches"
+    - ${DOCKER_EXEC} make -j${MAX_CORES} -C ${CLONE_PATH} apply_patches
     - echo "[CI] Committing changes to container"
     - docker commit ${CONTAINER_EXEC} ${CONTAINER_IMAGE_SHA}
     - echo "[CI] Shutting down container"
