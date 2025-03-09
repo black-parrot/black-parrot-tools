@@ -45,20 +45,6 @@ variables:
   CLONE_PATH: "${REPO_NAME}-${SHA}" # Clone per-commit
 
 ###################################################
-## Basic Setup
-###################################################
-env-setup:
-  stage: .pre
-  image: { name: alpine/git:v2.47.2, entrypoint: [""] }
-  script:
-    - echo "PREVIOUS_SHA=$(git rev-parse HEAD^)" | tee -a $GITLAB_ENV >> build.env
-    - echo "CURRENT_SHA=$(git rev-parse HEAD)" | tee -a $GITLAB_ENV >> build.env
-  artifacts:
-    when: on_success
-    reports:
-      dotenv: build.env
-
-###################################################
 ## Job Templates
 ###################################################
 .centos7_mixin:
@@ -88,13 +74,15 @@ env-setup:
     GIT_SUBMODULE_STRATEGY: "recursive"
     GIT_SUBMODULE_UPDATE_FLAGS: "--jobs ${MAX_CORES} --recommend-shallow"
 
+.vanilla_mixin:
+  image: { name: alpine/git:v2.47.2, entrypoint: [""] }
+
 .dind_mixin:
+  image: [ docker:24.0.5 ]
   services: [ docker:dind ]
   tags: [ saas-linux-small-amd64 ] # Use shared gitlab runner
 
 .job_template:
-  needs: [ env-setup ]
-  extends: .no_clone_mixin
   variables:
     LOG_FILE: "${JOB_NAME}.log"
   artifacts:
@@ -102,9 +90,17 @@ env-setup:
     paths:
       - "*.log"
 
+.setup_template:
+  extends: [.job_template]
+  stage: .pre
+  artifacts:
+    when: on_success
+    reports:
+      dotenv: build.env
+
 ## https://docs.gitlab.com/ee/user/packages/container_registry/build_and_push_images.html
 .image_template:
-  extends: [ .job_template, .fetch_mixin ]
+  extends: [ .job_template ]
   variables:
     CONTAINER_ROOT: "${REGISTRY_IMAGE}:${DOCKER_PLATFORM}"
     CONTAINER_IMAGE_RAW: "${CONTAINER_ROOT}-${CURRENT_SHA}-raw"
@@ -199,14 +195,25 @@ env-setup:
       - ${CLONE_PATH}/install
 
 ###################################################
+## Basic Setup
+###################################################
+setup-dotenv:
+  extends: [ .setup_template, .vanilla_mixin ]
+  script:
+    - echo "PREVIOUS_SHA=$(git rev-parse HEAD^)" | tee -a $GITLAB_ENV >> build.env
+    - echo "CURRENT_SHA=$(git rev-parse HEAD)" | tee -a $GITLAB_ENV >> build.env
+
+###################################################
 ## Creating and populating the docker images
 ###################################################
 raw-image-ubuntu2404:
-  extends: [.build_image_template, .ubuntu2404_build_mixin]
+  extends: [.raw_image_template, .ubuntu2404_build_mixin]
+  needs: [ env-setup ]
   rules: !reference [.image_template, rules]
 
 raw-image-centos7:
-  extends: [.build_image_template, .centos7_mixin]
+  extends: [.raw_image_template, .centos7_mixin]
+  needs: [ env-setup ]
   rules: !reference [.image_template, rules]
 
 repo-image-ubuntu2404:
