@@ -51,9 +51,10 @@ env-setup:
   stage: .pre
   image: { name: alpine/git:v2.47.2, entrypoint: [""] }
   script:
-    - echo "PREVIOUS_SHA=$(git rev parse HEAD^)" | tee -a $GITLAB_ENV >> build.env
-    - echo "CURRENT_SHA=$(git rev parse HEAD)" | tee -a $GITLAB_ENV >> build.env
+    - echo "PREVIOUS_SHA=$(git rev-parse HEAD^)" | tee -a $GITLAB_ENV >> build.env
+    - echo "CURRENT_SHA=$(git rev-parse HEAD)" | tee -a $GITLAB_ENV >> build.env
   artifacts:
+    when: on_success
     reports:
       dotenv: build.env
 
