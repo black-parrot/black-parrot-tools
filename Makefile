@@ -20,6 +20,9 @@ apply_patches: ## applies patches to submodules
 apply_patches: build.patch
 $(eval $(call bsg_fn_build_if_new,patch,$(CURDIR),$(BP_TOOLS_TOUCH_DIR)))
 %/.patch_build: checkout
+	# Disable long checkouts
+	@$(CD) $(BP_TOOLS_YSLANG_DIR); $(GIT) config --local submodule.tests/third_party/croc.update none
+	@$(CD) $(BP_TOOLS_YSLANG_DIR); $(GIT) config --local submodule.tests/third_party.yosys update none
 	@$(GIT) submodule sync --recursive
 	@$(GIT) submodule update --init --recursive --recommend-shallow
 	@$(call patch_if_new,$(BP_TOOLS_AXE_DIR),$(BP_TOOLS_PATCH_DIR)/axe)

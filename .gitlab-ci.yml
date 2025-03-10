@@ -38,6 +38,9 @@ variables:
   FF_USE_FASTZIP: "true"
   ARTIFACT_COMPRESSION_LEVEL: "fastest"
   CACHE_COMPRESSION_LEVEL: "fastest"
+  # git flags
+  FETCH_FLAGS: "--jobs=${CORES_PER_JOB} --branch=${BRANCH} --prune --no-tags --single-branch"
+  SUBMODULE_FLAGS: "--jobs=${CORES_PER_JOB} --recommend-shallow"
   #########################################
   # Generated Global Variables
   #########################################
@@ -63,16 +66,17 @@ variables:
   variables:
     # Fetch just the docker file
     GIT_STRATEGY: "fetch"
-    GIT_FETCH_EXTRA_FLAGS: "--prune --progress --no-tags"
-    GIT_SUBMODULE_STRATEGY: "none"
+    GIT_FETCH_EXTRA_FLAGS: "${FETCH_FLAGS}"
+    GIT_SUBMODULE_STRATEGY: "normal"
+    GIT_SUBMODULE_UPDATE_FLAGS: "${SUBMODULE_FLAGS}"
 
 .full_clone_mixin:
   variables:
     # Do a full clone
     GIT_STRATEGY: "clone"
-    GIT_FETCH_EXTRA_FLAGS: "--prune --progress --no-tags"
+    GIT_FETCH_EXTRA_FLAGS: "${FETCH_FLAGS}"
     GIT_SUBMODULE_STRATEGY: "recursive"
-    GIT_SUBMODULE_UPDATE_FLAGS: "--jobs ${MAX_CORES} --recommend-shallow"
+    GIT_SUBMODULE_UPDATE_FLAGS: "${SUBMODULE_FLAGS}"
 
 .job_template:
   image: {name: "docker:24.0.5"}
@@ -148,16 +152,12 @@ variables:
     - ${DOCKER_LAUNCH} -c "tail -f /dev/null"
     - echo "[CI] Checking logs"
     - docker logs ${DOCKER_NAME}
-    - echo "[CI] Cloning repo"
-    - ${DOCKER_EXEC} -c "git clone --progress ${REPO_URL} ${CLONE_PATH}"
-    - echo "[CI] Sanity checks"
-    - ${DOCKER_EXEC} -c "pwd && ls && ls * && echo ${CLONE_PATH}"
     - echo "[CI] Versions"
     - ${DOCKER_EXEC} -c "gcc --version && git --version && python --version && python3 --version"
-    - echo "[CI] Checking out ${SHA}"
-    - ${DOCKER_EXEC} -c "cd ${CLONE_PATH} && git checkout ${SHA}"
-    - echo "[CI] Checking out submodules"
-    - ${DOCKER_EXEC} -c "make -j${MAX_CORES} -C ${CLONE_PATH} checkout"
+    - echo "[CI] Cloning repo"
+    - ${DOCKER_EXEC} -c "git clone ${FETCH_FLAGS} ${REPO_URL} ${CLONE_PATH}"
+    - echo "[CI] Sanity checks"
+    - ${DOCKER_EXEC} -c "pwd && ls && ls * && echo ${CLONE_PATH}"
     - echo "[CI] Applying patches to submodules"
     - ${DOCKER_EXEC} -c "make -j${MAX_CORES} -C ${CLONE_PATH} apply_patches"
     - echo "[CI] Committing changes to container"
@@ -196,8 +196,15 @@ repo-image-ubuntu2404:
 
 build-boost-ubuntu2404:
   extends: [.build_template, .ubuntu2404_mixin]
+  needs: [{job: repo-image-ubuntu2404, optional: true}]
   script:
     - make -j${CORES_PER_JOB} -C ${CLONE_PATH} build.boost
+
+#build-boost-centos7:
+#  extends: [.build_template, .centos7_mixin]
+#  needs: [{job: repo-image-centos7, optional: true}]
+#  script:
+#    - make -j${CORES_PER_JOB} -C ${CLONE_PATH} build.boost
 
 ###################################################
 ## Actually building tools
