@@ -83,7 +83,7 @@ variables:
   image: {name: "docker:24.0.5"}
   variables:
     LOG_FILE: "${JOB_NAME}.log"
-    CONTAINER_ROOT: "${REGISTRY_IMAGE}:${DOCKER_PLATFORM}"
+    CONTAINER_ROOT: "${REGISTRY_IMAGE}:${DOCKER_PLATFORM}-${SHA}"
     CONTAINER_IMAGE_RAW: "${CONTAINER_ROOT}-raw"
     CONTAINER_IMAGE_REPO: "${CONTAINER_ROOT}-repo"
   artifacts:
