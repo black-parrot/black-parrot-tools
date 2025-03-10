@@ -46,7 +46,7 @@ variables:
   # Generated Global Variables
   #########################################
   CACHE_KEY: "${REPO_NAME}-${BRANCH}" # Cache per-branch
-  CLONE_PATH: "${CI_BUILDS_DIR}/${REPO_NAME}-${SHA}" # Clone per-commit
+  CLONE_PATH: "${BUILDS}/${REPO_NAME}-${SHA}" # Clone per-commit
 
 ###################################################
 ## Job Templates
@@ -204,6 +204,8 @@ build-boost-ubuntu2404:
   extends: [.build_template, .ubuntu2404_mixin]
   needs: [{job: repo-image-ubuntu2404, optional: true}]
   script:
+    - "pwd && ls && ls * && echo ${CLONE_PATH}"
+    - cd ${BUILDS}
     - "pwd && ls && ls * && echo ${CLONE_PATH}"
     - make -j${CORES_PER_JOB} -C ${CLONE_PATH} build.boost
 
