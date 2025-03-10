@@ -39,8 +39,9 @@ variables:
   ARTIFACT_COMPRESSION_LEVEL: "fastest"
   CACHE_COMPRESSION_LEVEL: "fastest"
   # git flags
-  FETCH_FLAGS: "--jobs=${CORES_PER_JOB} --prune --no-tags --single-branch"
-  SUBMODULE_FLAGS: "--jobs=${CORES_PER_JOB} --recommend-shallow"
+  FETCH_FLAGS: "--jobs=${CORES_PER_JOB} --prune --no-tags"
+  CLONE_FLAGS: "${FETCH_FLAGS} --single-branch --branch=${BRANCH}"
+  UPDATE_FLAGS: "--jobs=${CORES_PER_JOB} --recommend-shallow"
   #########################################
   # Generated Global Variables
   #########################################
@@ -68,15 +69,15 @@ variables:
     GIT_STRATEGY: "fetch"
     GIT_FETCH_EXTRA_FLAGS: "${FETCH_FLAGS}"
     GIT_SUBMODULE_STRATEGY: "normal"
-    GIT_SUBMODULE_UPDATE_FLAGS: "${SUBMODULE_FLAGS}"
+    GIT_SUBMODULE_UPDATE_FLAGS: "${UPDATE_FLAGS}"
 
 .full_clone_mixin:
   variables:
     # Do a full clone
     GIT_STRATEGY: "clone"
-    GIT_FETCH_EXTRA_FLAGS: "${FETCH_FLAGS}"
+    GIT_FETCH_EXTRA_FLAGS: "${CLONE_FLAGS}"
     GIT_SUBMODULE_STRATEGY: "recursive"
-    GIT_SUBMODULE_UPDATE_FLAGS: "${SUBMODULE_FLAGS}"
+    GIT_SUBMODULE_UPDATE_FLAGS: "${UPDATE_FLAGS}"
 
 .job_template:
   image: {name: "docker:24.0.5"}
@@ -155,7 +156,7 @@ variables:
     - echo "[CI] Versions"
     - ${DOCKER_EXEC} -c "gcc --version && git --version && python --version && python3 --version"
     - echo "[CI] Cloning repo"
-    - ${DOCKER_EXEC} -c "git clone ${FETCH_FLAGS} --branch=${BRANCH} ${REPO_URL} ${CLONE_PATH}"
+    - ${DOCKER_EXEC} -c "git clone ${CLONE_FLAGS} ${REPO_URL} ${CLONE_PATH}"
     - echo "[CI] Sanity checks"
     - ${DOCKER_EXEC} -c "pwd && ls && ls * && echo ${CLONE_PATH}"
     - echo "[CI] Applying patches to submodules"
