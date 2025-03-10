@@ -40,7 +40,7 @@ variables:
   CACHE_COMPRESSION_LEVEL: "fastest"
   # git flags
   FETCH_FLAGS: "--jobs=${CORES_PER_JOB} --prune --no-tags"
-  CLONE_FLAGS: "--jobs=${CORES_PER_JOB} --branch=${BRANCH}"
+  CLONE_FLAGS: "--jobs=${CORES_PER_JOB}"
   UPDATE_FLAGS: "--jobs=${CORES_PER_JOB} --recommend-shallow"
   #########################################
   # Generated Global Variables
@@ -159,6 +159,8 @@ variables:
     - ${DOCKER_EXEC} -c "git clone ${CLONE_FLAGS} ${REPO_URL} ${CLONE_PATH}"
     - echo "[CI] Sanity checks"
     - ${DOCKER_EXEC} -c "pwd && ls && ls * && echo ${CLONE_PATH}"
+    - echo "[CI] Checking out ${SHA}"
+    - ${DOCKER_EXEC} -c "cd ${CLONE_PATH} && git checkout ${SHA}"
     - echo "[CI] Applying patches to submodules"
     - ${DOCKER_EXEC} -c "make -j${MAX_CORES} -C ${CLONE_PATH} apply_patches"
     - echo "[CI] Committing changes to container"
