@@ -46,7 +46,7 @@ variables:
   # Generated Global Variables
   #########################################
   CACHE_KEY: "${REPO_NAME}-${BRANCH}" # Cache per-branch
-  CLONE_PATH: "${REPO_NAME}-${SHA}" # Clone per-commit
+  CLONE_PATH: "${CI_BUILDS_DIR}/${REPO_NAME}-${SHA}" # Clone per-commit
 
 ###################################################
 ## Job Templates
@@ -173,10 +173,13 @@ variables:
 .build_template:
   extends: [.job_template, .no_clone_mixin]
   image: {name: "${CONTAINER_IMAGE_REPO}"}
+  variables:
+    BP_TOOLS_INSTALL_DIR: ${REPO_NAME}-${SHA}/install
+    BP_TOOLS_WORK_DIR: ${REPO_NAME}-${SHA}/work
   artifacts:
     when: on_success
     paths:
-      - ${CLONE_PATH}/install
+      - ${BP_TOOLS_INSTALL_DIR}
 
 ###################################################
 ## Creating and populating the docker images
