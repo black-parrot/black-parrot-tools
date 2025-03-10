@@ -121,13 +121,12 @@ variables:
 .raw_image_template:
   extends: [.image_template, .fetch_mixin]
   variables:
-    BASE_IMAGE: "${CONTAINER_IMAGE_RAW}"
+    BASE_IMAGE: ""
     CONTAINER_IMAGE: "${CONTAINER_IMAGE_RAW}"
   script:
     - echo "[CI] Building image ${CONTAINER_IMAGE}"
     - >
       docker build docker -f docker/Dockerfile.${DOCKER_PLATFORM}
-      --build-arg BUILDKIT_INLINE_CACHE=1 --cache-from ${CONTAINER_IMAGE_RAW}
       --build-arg USER_NAME="${USER_NAME}"
       --build-arg USER_ID="${USER_ID}"
       --build-arg GROUP_NAME="${GROUP_NAME}"
