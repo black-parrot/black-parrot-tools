@@ -40,7 +40,7 @@ variables:
   CACHE_COMPRESSION_LEVEL: "fastest"
   # git flags
   FETCH_FLAGS: "--jobs=${CORES_PER_JOB} --prune --no-tags"
-  CLONE_FLAGS: "--jobs=${CORES_PER_JOB} --branch=${BRANCH} --single-branch"
+  CLONE_FLAGS: "--jobs=${CORES_PER_JOB} --branch=${BRANCH}"
   UPDATE_FLAGS: "--jobs=${CORES_PER_JOB} --recommend-shallow"
   #########################################
   # Generated Global Variables
