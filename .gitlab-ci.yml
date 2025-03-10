@@ -39,7 +39,7 @@ variables:
   ARTIFACT_COMPRESSION_LEVEL: "fastest"
   CACHE_COMPRESSION_LEVEL: "fastest"
   # git flags
-  FETCH_FLAGS: "--jobs=${CORES_PER_JOB} --branch=${BRANCH} --prune --no-tags --single-branch"
+  FETCH_FLAGS: "--jobs=${CORES_PER_JOB} --prune --no-tags --single-branch"
   SUBMODULE_FLAGS: "--jobs=${CORES_PER_JOB} --recommend-shallow"
   #########################################
   # Generated Global Variables
@@ -155,7 +155,7 @@ variables:
     - echo "[CI] Versions"
     - ${DOCKER_EXEC} -c "gcc --version && git --version && python --version && python3 --version"
     - echo "[CI] Cloning repo"
-    - ${DOCKER_EXEC} -c "git clone ${FETCH_FLAGS} ${REPO_URL} ${CLONE_PATH}"
+    - ${DOCKER_EXEC} -c "git clone ${FETCH_FLAGS} --branch=${BRANCH} ${REPO_URL} ${CLONE_PATH}"
     - echo "[CI] Sanity checks"
     - ${DOCKER_EXEC} -c "pwd && ls && ls * && echo ${CLONE_PATH}"
     - echo "[CI] Applying patches to submodules"
