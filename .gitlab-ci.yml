@@ -155,6 +155,9 @@ variables:
     - docker logs ${DOCKER_NAME}
     - echo "[CI] Versions"
     - ${DOCKER_EXEC} -c "gcc --version && git --version && python --version && python3 --version"
+    - echo "[CI] Sanity checks"
+    - ${DOCKER_EXEC} -c "pwd && ls && ls * && echo ${CLONE_PATH}"
+    - ${DOCKER_EXEC} -c "cd / && pwd ls && ls $(dirname ${CLONE_PATH})"
     - echo "[CI] Cloning repo"
     - ${DOCKER_EXEC} -c "mkdir -p $(dirname ${CLONE_PATH})"
     - ${DOCKER_EXEC} -c "git clone ${CLONE_FLAGS} ${REPO_URL} ${CLONE_PATH}"
