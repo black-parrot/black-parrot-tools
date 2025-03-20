@@ -196,6 +196,7 @@ stages:
     PUBLISH_TGZ: "install-${SHA}.tar.gz"
     PROJECT_URL: "${API_URL}/projects/${PROJECT_ID}"
     PACKAGE_URL: "${PROJECT_URL}/packages/generic/${DOCKER_PLATFORM}"
+    PUBLISH_URL: "${PACKAGE_URL}/${BRANCH}/${PUBLISH_TGZ}"
   script:
     - |
       echo "[CI] archives found\n$(ls *.tar.gz)"
@@ -205,10 +206,10 @@ stages:
     - echo "[CI] Zipping installation ${PUBLISH_TGZ}"
     - tar -czvf ${PUBLISH_TGZ} ${INSTALL_DIR}/ >> ${JOB_LOG} 2>&1
     - echo "[CI] Publishing ${PUBLISH_TGZ} to ${PACKAGE_URL}"
-    - >
-      curl --location --header "JOB-TOKEN: ${JOB_TOKEN}"
-           --upload-file ${PUBLISH_TGZ}
-           "${PACKAGE_URL}/${BRANCH}/${PUBLISH_TGZ}"
+    - |
+      curl --location --header "JOB-TOKEN: ${JOB_TOKEN}" \
+           --upload-file ${PUBLISH_TGZ} \
+           "${PUBLISH_URL}"
 
 ###################################################
 ## Actual Jobs
