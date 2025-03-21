@@ -1,10 +1,14 @@
 
-$(eval $(call bsg_fn_build_if_missing,boost,$(BP_TOOLS_WORK_DIR),$(BP_TOOLS_TOUCH_DIR)))
+$(eval $(call bsg_tgt_build_if_missing,boost,$(BP_TOOLS_WORK_DIR),$(BP_TOOLS_TOUCH_DIR),$(BP_TOOLS_PATCH_DIR)))
 %/.boost_build:
 	@$(eval BOOST_VERSION := 1.82.0)
 	@$(eval BOOST := boost_$(subst .,_,$(BOOST_VERSION)))
 	@$(eval BOOST_URL := https://sourceforge.net/projects/boost/files/boost)
 	@$(eval BOOST_DOWNLOAD := $(BOOST_URL)/$(BOOST_VERSION)/$(BOOST).tar.gz/download)
+	@$(eval CONFIG_SCRIPT := "import sysconfig; print(sysconfig.get_config_h_filename\(\)\)")
+	@$(eval CONFIG_H := $(shell python -c "import sysconfig; print(sysconfig.get_config_h_filename());"))
+	@$(eval CONFIG_DIR := $(dir $(CONFIG_H)))
+	@$(eval export CPLUS_INCLUDE_PATH := $(CONFIG_DIR):$(CPLUS_INCLUDE_PATH))
 	@$(CD) $(@D); \
 		$(WGET) -qO- $(BOOST_DOWNLOAD) | $(TAR) xzv
 	@$(CD) $(@D)/$(BOOST); \
@@ -12,24 +16,29 @@ $(eval $(call bsg_fn_build_if_missing,boost,$(BP_TOOLS_WORK_DIR),$(BP_TOOLS_TOUC
 	@$(CD) $(@D)/$(BOOST); \
 		./b2 --prefix=$(BP_TOOLS_INSTALL_DIR) \
 			toolset=gcc \
-			cxxflags="-std=c++14" \
-			linkflags="-std=c++14" \
 			install
 
-$(eval $(call bsg_fn_build_if_new,axe,$(BP_TOOLS_AXE_DIR),$(BP_TOOLS_TOUCH_DIR)))
+$(eval $(call bsg_tgt_build_if_new,axe,$(BP_TOOLS_AXE_DIR),$(BP_TOOLS_TOUCH_DIR),$(BP_TOOLS_PATCH_DIR)))
 %/.axe_build:
 	@$(CD) $(@D)/src; ./make.sh
 	@$(CP) $(@D)/src/axe $(BP_TOOLS_BIN_DIR)
 
-$(eval $(call bsg_fn_build_if_new,bsg_fakeram,$(BP_TOOLS_FAKERAM_DIR),$(BP_TOOLS_TOUCH_DIR)))
+$(eval $(call bsg_tgt_build_if_new,bsg_fakeram,$(BP_TOOLS_FAKERAM_DIR),$(BP_TOOLS_TOUCH_DIR),$(BP_TOOLS_PATCH_DIR)))
 %/.bsg_fakeram_build:
 	@$(MAKE) -j1 -C $(@D) tools
 
-$(eval $(call bsg_fn_build_if_new,bsg_sv2v,$(BP_TOOLS_SV2V_DIR),$(BP_TOOLS_TOUCH_DIR)))
+$(eval $(call bsg_tgt_build_if_new,bsg_sv2v,$(BP_TOOLS_SV2V_DIR),$(BP_TOOLS_TOUCH_DIR),$(BP_TOOLS_PATCH_DIR)))
 %/.bsg_sv2v_build:
-	@$(MAKE) -j1 -C $(@D) tools
+	@$(eval PYVERILOG_URL := https://github.com/PyHDI/Pyverilog.git)
+	@$(eval PYVERILOG_VER := 1.1.3)
+	@$(eval PYVERILOG_DIR := $(@D)/Pyverilog)
+	@$(RMRF) $(PYVERILOG_DIR)
+	@$(GIT) clone -b $(PYVERILOG_VER) $(PYVERILOG_URL) $(PYVERILOG_DIR)
+	@$(CD) $(PYVERILOG_DIR); $(GIT) apply $(@D)/patches/pyverilog_add_wirelist_reglist.patch
+	@$(CD) $(PYVERILOG_DIR); $(GIT) apply $(@D)/patches/pyverilog_sensitivity_comp.patch
+	@$(CD) $(PYVERILOG_DIR); $(PYTHON) setup.py install
 
-$(eval $(call bsg_fn_build_if_new,dromajo,$(BP_TOOLS_DROMAJO_DIR),$(BP_TOOLS_TOUCH_DIR)))
+$(eval $(call bsg_tgt_build_if_new,dromajo,$(BP_TOOLS_DROMAJO_DIR),$(BP_TOOLS_TOUCH_DIR),$(BP_TOOLS_PATCH_DIR)))
 %/.dromajo_build:
 	@$(eval SOURCE_DIR := $(@D))
 	@$(eval BUILD_DIR := $(@D)/build)
@@ -40,14 +49,14 @@ $(eval $(call bsg_fn_build_if_new,dromajo,$(BP_TOOLS_DROMAJO_DIR),$(BP_TOOLS_TOU
 	@$(CP) $(BUILD_DIR)/libdromajo_cosim.a $(BP_TOOLS_LIB_DIR)
 	@$(CP) $(SOURCE_DIR)/include/* $(BP_TOOLS_INCLUDE_DIR)
 
-$(eval $(call bsg_fn_build_if_new,spike,$(BP_TOOLS_SPIKE_DIR),$(BP_TOOLS_TOUCH_DIR)))
+$(eval $(call bsg_tgt_build_if_new,spike,$(BP_TOOLS_SPIKE_DIR),$(BP_TOOLS_TOUCH_DIR),$(BP_TOOLS_PATCH_DIR)))
 %/.spike_build:
 	@$(CD) $(@D); \
 		./configure --prefix=$(BP_TOOLS_INSTALL_DIR) \
 		--without-boost --without-boost-asio --without-boost-regex; \
 		$(MAKE) && $(MAKE) install
 
-$(eval $(call bsg_fn_build_if_new,surelog,$(BP_TOOLS_SURELOG_DIR),$(BP_TOOLS_TOUCH_DIR)))
+$(eval $(call bsg_tgt_build_if_new,surelog,$(BP_TOOLS_SURELOG_DIR),$(BP_TOOLS_TOUCH_DIR),$(BP_TOOLS_PATCH_DIR)))
 %/.surelog_build:
 	@$(eval BUILD_DIR := $(@D)/build)
 	@$(MKDIR) -p $(BUILD_DIR)
@@ -55,7 +64,7 @@ $(eval $(call bsg_fn_build_if_new,surelog,$(BP_TOOLS_SURELOG_DIR),$(BP_TOOLS_TOU
 	@$(CD) $(BUILD_DIR); \
 		$(MAKE) && $(MAKE) install
 
-$(eval $(call bsg_fn_build_if_new,verilator,$(BP_TOOLS_VERILATOR_DIR),$(BP_TOOLS_TOUCH_DIR)))
+$(eval $(call bsg_tgt_build_if_new,verilator,$(BP_TOOLS_VERILATOR_DIR),$(BP_TOOLS_TOUCH_DIR),$(BP_TOOLS_PATCH_DIR)))
 %/.verilator_build:
 	@$(CD) $(@D); \
 		autoconf; \
@@ -64,14 +73,14 @@ $(eval $(call bsg_fn_build_if_new,verilator,$(BP_TOOLS_VERILATOR_DIR),$(BP_TOOLS
 	@$(MAKE) -C $(@D) install
 	@$(CP) $(@D)/include/vltstd/svdpi.h $(BP_TOOLS_INCLUDE_DIR)
 
-$(eval $(call bsg_fn_build_if_new,yosys,$(BP_TOOLS_YOSYS_DIR),$(BP_TOOLS_TOUCH_DIR)))
+$(eval $(call bsg_tgt_build_if_new,yosys,$(BP_TOOLS_YOSYS_DIR),$(BP_TOOLS_TOUCH_DIR),$(BP_TOOLS_PATCH_DIR)))
 %/.yosys_build:
 	@$(eval export PREFIX := $(BP_TOOLS_INSTALL_DIR))
 	@$(CD) $(@D); \
 		$(MAKE) config-gcc && $(MAKE) && $(MAKE) install
 
-$(eval $(call bsg_fn_build_if_new,yslang,$(BP_TOOLS_YSLANG_DIR),$(BP_TOOLS_TOUCH_DIR)))
-%/.yslang_build:
+$(eval $(call bsg_tgt_build_if_new,yslang,$(BP_TOOLS_YSLANG_DIR),$(BP_TOOLS_TOUCH_DIR),$(BP_TOOLS_PATCH_DIR)))
+%/.yslang_build: build.yosys
 	@$(eval YOSYS_PLUGIN_DIR := $(BP_TOOLS_INSTALL_DIR)/share/yosys/plugins)
 	@$(eval export YOSYS_PREFIX := $(BP_TOOLS_INSTALL_DIR)/bin/)
 	@$(MKDIR) -p $(YOSYS_PLUGIN_DIR)

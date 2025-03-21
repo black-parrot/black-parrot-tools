@@ -1,0 +1,249 @@
+
+variables:
+  #########################################
+  # Required BSG Variables
+  #########################################
+  USER_NAME: "${BSG_CI_USER_NAME}"
+  USER_ID: "${BSG_CI_USER_ID}"
+  GROUP_NAME: "${BSG_CI_GROUP_NAME}"
+  GROUP_ID: "${BSG_CI_GROUP_ID}"
+  OTHER_GROUPS: "${BSG_CI_OTHER_GROUPS}"
+  CORES_PER_JOB: "${BSG_CI_CORES_PER_JOB}"
+  WORKDIR: "${BSG_CI_WORKDIR}"
+  #########################################
+  # Optional BSG Variables
+  #########################################
+  FORCE_REBUILD: "${BSG_CI_FORCE_REBUILD}"
+  #########################################
+  # GitLab Variables
+  #########################################
+  # Automatic; we save them as "documentation"
+  BUILDS: "${CI_BUILDS_DIR}"
+  BRANCH: "${CI_COMMIT_REF_SLUG}"
+  SHA: "${CI_COMMIT_SHA}"
+  REPO_NAME: "${CI_PROJECT_NAME}"
+  JOB_NAME: "${CI_JOB_NAME_SLUG}"
+  REGISTRY: "${CI_REGISTRY}"
+  REGISTRY_USER: "${CI_REGISTRY_USER}"
+  REGISTRY_IMAGE: "${CI_REGISTRY_IMAGE}"
+  REGISTRY_PASSWORD: "${CI_REGISTRY_PASSWORD}"
+  JOB_TOKEN: "${CI_JOB_TOKEN}"
+  PROJECT_ID: "${CI_PROJECT_ID}"
+  API_URL: "${CI_API_V4_URL}"
+  # workaround for https://gitlab.com/gitlab-org/gitlab/-/issues/386967
+  GIT_CONFIG_COUNT: 1
+  GIT_CONFIG_KEY_0: "safe.directory"
+  GIT_CONFIG_VALUE_0: "*"
+  # Performance flags https://docs.gitlab.com/runner/configuration/feature-flags/
+  FF_USE_FASTZIP: "true"
+  #ARTIFACT_COMPRESSION_LEVEL: "fastest"
+  #CACHE_COMPRESSION_LEVEL: "fastest"
+  # Enable docker caching
+  DOCKER_BUILDKIT: "1"
+  DOCKER_DRIVER: overlay2
+  #########################################
+  # Generated Global Variables
+  #########################################
+  CLONE_NAME: "${REPO_NAME}-${BRANCH}" # Clone per-branch
+  CACHE_KEY: "${REPO_NAME}-${BRANCH}-${DOCKER_PLATFORM}" # Cache per-branch-platform
+  CONTAINER_IMAGE: "${REGISTRY_IMAGE}:${DOCKER_PLATFORM}" # Container per-platform
+
+###################################################
+## Workflow
+###################################################
+
+# Currently only run on pushes, merge requests do not run separately
+workflow:
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "push"
+
+stages:
+  - docker
+  - build
+  - publish
+
+###################################################
+## Mixins
+###################################################
+.clone_mixin:
+  variables:
+    GIT_STRATEGY: "clone"
+    GIT_DEPTH: "5"
+    GIT_FETCH_EXTRA_FLAGS: "--jobs=${CORES_PER_JOB}"
+    GIT_SUBMODULE_STRATEGY: "none"
+
+.fetch_mixin:
+  variables:
+    GIT_STRATEGY: "fetch"
+    GIT_DEPTH: "5"
+    GIT_CLONE_PATH: "${BUILDS}/${CLONE_NAME}"
+    GIT_FETCH_EXTRA_FLAGS: "--jobs=${CORES_PER_JOB} --prune --no-tags"
+    GIT_SUBMODULE_STRATEGY: "none"
+    
+.nogit_mixin:
+  variables:
+    GIT_STRATEGY: "none"
+    GIT_SUBMODULE_STRATEGY: "none"
+
+###################################################
+## Job Templates
+###################################################
+.job_template:
+  variables:
+    LOG_DIR: "./logs"
+    JOB_LOG: "${LOG_DIR}/${JOB_NAME}.log"
+    RPT_DIR: "./reports"
+    JOB_RPT: "${RPT_DIR}/${JOB_NAME}.rpt"
+  before_script:
+    - mkdir -p ${LOG_DIR} ${RPT_DIR}
+    - echo "[CI] Starting job ${JOB_GROUP_NAME}" | tee -a ${JOB_LOG}
+  after_script:
+    - |
+      echo "[CI] Finishing job ${JOB_GROUP_NAME}" | tee -a ${JOB_LOG}
+      if [ $CI_JOB_STATUS == 'success' ]; then
+        echo "[CI] job passed with status $CI_JOB_STATUS" | tee -a ${JOB_RPT}
+      else
+        echo "[CI] job failed with status $CI_JOB_STATUS" | tee -a ${JOB_RPT}
+      fi
+  artifacts:
+    when: always
+    paths:
+      - "${LOG_DIR}/"
+      - "${RPT_DIR}/"
+
+## https://docs.gitlab.com/ee/user/packages/container_registry/build_and_push_images.html
+.image_template:
+  stage: docker
+  extends: [.job_template, .clone_mixin]
+  image: {name: "docker:24.0.5"}
+  services: [docker:24.0.5-dind]
+  tags: [saas-linux-small-amd64] # Use shared gitlab runner
+  before_script:
+    - !reference [.job_template, before_script]
+    - |
+      echo "[CI] Logging into docker registry" | tee -a ${JOB_LOG}
+      echo "${REGISTRY_PASSWORD}" | docker login ${REGISTRY} -u ${REGISTRY_USER} --password-stdin
+      echo "[CI] Checking for previous docker image ${CONTAINER_IMAGE}" | tee -a ${JOB_LOG}
+      if docker manifest inspect ${CONTAINER_IMAGE} > /dev/null 2>&1; then
+        echo "[CI] ${CONTAINER_IMAGE} exists, pulling..." | tee -a ${JOB_LOG}
+        docker pull ${CONTAINER_IMAGE}
+      else
+        echo "[CI] ${CONTAINER_IMAGE} does not exist, starting from scratch"  | tee -a ${JOB_LOG}
+      fi
+  script:
+    - echo "[CI] Building image ${CONTAINER_IMAGE}" | tee -a ${JOB_LOG}
+    - >
+      docker build docker -f docker/Dockerfile.${DOCKER_PLATFORM}
+      --build-arg BUILDKIT_INLINE_CACHE=1 --cache-from ${CONTAINER_IMAGE}
+      --build-arg USER_NAME="${USER_NAME}"
+      --build-arg USER_ID="${USER_ID}"
+      --build-arg GROUP_NAME="${GROUP_NAME}"
+      --build-arg GROUP_ID="${GROUP_ID}"
+      --build-arg OTHER_GROUPS="${OTHER_GROUPS}"
+      --build-arg WORKDIR="${WORKDIR}"
+      -t ${CONTAINER_IMAGE} >> ${JOB_LOG} 2>&1
+  after_script:
+    - |
+      echo "[CI] Logging into docker registry"  | tee -a ${JOB_LOG}
+      echo "${REGISTRY_PASSWORD}" | docker login ${REGISTRY} -u ${REGISTRY_USER} --password-stdin
+      echo "[CI] Publishing docker images"  | tee -a ${JOB_LOG}
+      docker push ${CONTAINER_IMAGE}
+    - !reference [.job_template, after_script]
+  rules:
+    - if: $FORCE_REBUILD
+      when: always
+    - changes:
+        paths:
+          - "docker/requirements.txt"
+          - "docker/Dockerfile.${DOCKER_PLATFORM}"
+          - "docker/entrypoint.${DOCKER_PLATFORM}.sh"
+
+.build_template:
+  extends: [.job_template, .fetch_mixin]
+  stage: build
+  variables:
+    INSTALL_DIR: "install"
+    WORK_DIR: "work"
+    INSTALL_TGZ: "${INSTALL_DIR}-${TOOL}-${DOCKER_PLATFORM}.tar.gz"
+    # Exported to make sure things go in the right place
+    BP_TOOLS_WORK_DIR: "${CI_PROJECT_DIR}/${WORK_DIR}"
+    BP_TOOLS_INSTALL_DIR: "${CI_PROJECT_DIR}/${INSTALL_DIR}"
+    # https://gitlab.com/gitlab-org/gitlab-runner/-/issues/1736#note_107983504
+    FF_DISABLE_UMASK_FOR_DOCKER_EXECUTOR: "true"
+  image: {name: "${CONTAINER_IMAGE}"}
+  before_script:
+    - !reference [.job_template, before_script]
+    - echo "[CI] Checking out submodules" | tee -a ${JOB_LOG}
+    - make -j${CORES_PER_JOB} checkout >> ${JOB_LOG} 2>&1
+  script:
+    - make -j${CORES_PER_JOB} build.${TOOL} >> ${JOB_LOG} 2>&1
+  after_script:
+    - echo "[CI] Zipping ${TOOL} installation" | tee -a ${JOB_LOG}
+    - tar -czvf ${INSTALL_TGZ} ${INSTALL_DIR}/ >> ${JOB_LOG} 2>&1
+    - !reference [.job_template, after_script]
+  artifacts:
+    when: always
+    paths:
+      - "${LOG_DIR}/"
+      - "${RPT_DIR}/"
+      - "${INSTALL_TGZ}"
+
+.publish_template:
+  extends: [.job_template, .nogit_mixin]
+  stage: publish
+  variables:
+    INSTALL_DIR: "install"
+    PUBLISH_TGZ: "install-${SHA}.tar.gz"
+    PROJECT_URL: "${API_URL}/projects/${PROJECT_ID}"
+    PACKAGE_URL: "${PROJECT_URL}/packages/generic/${DOCKER_PLATFORM}"
+    PUBLISH_URL: "${PACKAGE_URL}/${BRANCH}/${PUBLISH_TGZ}"
+  script:
+    - |
+      echo "[CI] archives found\n$(ls *.tar.gz)"
+      for f in *-${DOCKER_PLATFORM}.tar.gz; do
+        tar -xzf $f >> ${JOB_LOG} 2>&1
+      done
+    - echo "[CI] Zipping installation ${PUBLISH_TGZ}"
+    - tar -czvf ${PUBLISH_TGZ} ${INSTALL_DIR}/ >> ${JOB_LOG} 2>&1
+    - echo "[CI] Publishing ${PUBLISH_TGZ} to ${PACKAGE_URL}"
+    - |
+      curl --location --header "JOB-TOKEN: ${JOB_TOKEN}" \
+           --upload-file ${PUBLISH_TGZ} \
+           "${PUBLISH_URL}"
+
+###################################################
+## Actual Jobs
+###################################################
+
+# We couple dependencies here while we wait for this feature
+# https://gitlab.com/gitlab-org/gitlab/-/issues/423456
+# needs:
+#  parallel:
+#    matrix:
+#      - DOCKER_PLATFORM: $DOCKER_PLATFORM
+
+image-tools:
+  extends: [.image_template]
+  tags: [saas-linux-small-amd64] # Use shared gitlab runner
+  rules: !reference [.image_template, rules]
+  parallel:
+    matrix:
+      - DOCKER_PLATFORM: ["ubuntu24.04", "centos7"]
+
+build-tools:
+  extends: [.build_template]
+  parallel:
+    matrix:
+      - DOCKER_PLATFORM: ["ubuntu24.04", "centos7"]
+        TOOL: ["boost", "verilator", "dromajo"]
+      - DOCKER_PLATFORM: ["ubuntu24.04", "centos7"]
+        TOOL: ["spike", "surelog", "yslang", "axe"]
+      - DOCKER_PLATFORM: ["ubuntu24.04", "centos7"]
+        TOOL: ["bsg_sv2v", "bsg_fakeram"]
+
+publish-tools:
+  extends: [.publish_template]
+  parallel:
+    matrix:
+      - DOCKER_PLATFORM: ["ubuntu24.04", "centos7"]
+
