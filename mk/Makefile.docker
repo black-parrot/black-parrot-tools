@@ -32,7 +32,7 @@ docker-image: ## creates a black-parrot-tools docker image
 		-t $(CONTAINER_NAME)
 
 docker-run: docker-image
-docker-run: ## mounts black-parrot-tools as a docker image
+docker-run: ## mounts black-parrot-tools as a docker container
 	$(CD) $(BP_TOOLS_DOCKER_DIR); \
 		$(DOCKER) run \
 			--volume=$(TOP):$(WORKDIR)/$(CONTAINER_NAME) \

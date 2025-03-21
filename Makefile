@@ -35,7 +35,7 @@ tools: tools_lite
 	@$(MAKE) build.yslang
 	@$(MAKE) build.axe
 
-tools_bsg: ## Additional tools for BSG users
+tools_bsg: ## additional tools for BSG users
 tools_bsg: tools 
 	# Fails on first build attempt
 	@$(MAKE) build.bsg_sv2v || $(MAKE) build.bsg_sv2v
