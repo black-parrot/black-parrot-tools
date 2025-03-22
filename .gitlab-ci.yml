@@ -160,6 +160,7 @@ stages:
 
 .build_template:
   extends: [.job_template, .fetch_mixin]
+  tags: [bsg]
   stage: build
   variables:
     INSTALL_DIR: "install"
@@ -224,7 +225,6 @@ stages:
 
 image-tools:
   extends: [.image_template]
-  tags: [saas-linux-small-amd64] # Use shared gitlab runner
   rules: !reference [.image_template, rules]
   parallel:
     matrix:
