@@ -17,9 +17,8 @@ checkout: ## checkout submodules
 	# Disable long checkouts
 	@$(GIT) -C $(BP_TOOLS_YSLANG_DIR) config --local submodule.tests/third_party/croc.update none
 	@$(GIT) -C $(BP_TOOLS_YSLANG_DIR) config --local submodule.tests/third_party/yosys.update none
-	@$(GIT) submodule sync --recursive
 	# Do the checkout
-	@$(GIT) submodule update --init --recursive
+	@$(GIT) submodule update
 
 tools_lite: ## minimal set of simulation tools
 tools_lite: checkout
