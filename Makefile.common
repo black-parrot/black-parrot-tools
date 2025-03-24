@@ -49,13 +49,13 @@ define bsg_fn_patch_if_new
 		cd $(src_root); $(check_patch) $$p && continue; \
 		echo "Patch is unapplied..."; \
 		if [ ! -z "$$patch_is_top" ]; then \
-		echo "Applying patch to sub-directory $(src_root);" \
-		cd $(src_root); $(apply_commit_patch) $$p; \
-		echo "Patch applied!"; \
+			echo "Applying patch to sub-directory $(src_root);" \
+			cd $(src_root); $(apply_commit_patch) $$p; \
+			echo "Patch applied!"; \
 		else \
-		echo "Applying patch to top-level $(src_root);" \
-		cd $(src_root); $(apply_stage_patch) $$p; \
-		echo "Patch applied!"; \
+			echo "Applying patch to top-level $(src_root);" \
+			cd $(src_root); $(apply_stage_patch) $$p; \
+			echo "Patch applied!"; \
 		fi \
 	done
 endef
@@ -87,8 +87,19 @@ $(build_tag): | $(patch_tag)
 $(patch_target): | $(patch_tag)
 $(repatch_target):
 	rm -f $(touch_dir)/$(name).patch.*
+	if [ -f $(src_dir)/.git ]; then \
+		git submodule deinit -f $(src_dir); \
+		git submodule init $(src_dir); \
+		git submodule update $(src_dir); \
+	fi
 	+$(MAKE) $(patch_tag)
 $(patch_tag):
+	if [ -f $(src_dir)/.git ]; then \
+		echo "Synchronizing submodules for $(1)"; \
+		git -C $(src_dir) submodule sync --recursive; \
+		echo "Checking out submodules for $(1)"; \
+		git -C $(src_dir) submodule update --init --recursive; \
+	fi
 	$(call bsg_fn_patch_if_new,$(src_dir),$(patch_root))
 	echo "Patching successful; ignore errors"
 	touch $(patch_tag)
