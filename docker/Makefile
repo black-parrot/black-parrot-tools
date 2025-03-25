@@ -7,12 +7,14 @@ DOCKER_WORKDIR ?= /work
 USE_LOCAL_CREDENTIALS ?=
 
 docker-image: ## creates a docker image
+	@$(eval CONTAINER_NAME := $(notdir $(TOP)))
+	@$(eval DOCKER         := docker)
 	@$(eval USER_NAME    := $(if $(USE_LOCAL_CREDENTIALS),$(USER),build))
 	@$(eval USER_ID      := $(if $(USE_LOCAL_CREDENTIALS),$(shell id -u),1234))
-	@$(eval GROUP_NAME   := $(if $(USE_LOCAL_CREDENTIALS),$(USER)))
+	@$(eval GROUP_NAME   := $(if $(USE_LOCAL_CREDENTIALS),$(USER),build))
 	@$(eval GROUP_ID     := $(if $(USE_LOCAL_CREDENTIALS),$(shell id -g),5678))
 	@$(eval OTHER_GROUPS := $(if $(USE_LOCAL_CREDENTIALS),$(shell id --groups),))
-	@$(DOCKER) build . -f Dockerfile.$(DOCKER_PLATFORM) \
+	@docker build . -f Dockerfile.$(DOCKER_PLATFORM) \
 		--build-arg USER_NAME="$(USER_NAME)" \
 		--build-arg USER_ID="$(USER_ID)" \
 		--build-arg GROUP_NAME="$(GROUP_NAME)" \
@@ -24,6 +26,7 @@ docker-image: ## creates a docker image
 docker-run: docker-image
 docker-run: ## mounts as a docker container
 	@$(eval CONTAINER_NAME := $(notdir $(TOP)))
+	@$(eval DOCKER         := docker)
 	@$(DOCKER) run \
 		--volume=$(TOP):$(DOCKER_WORKDIR)/$(CONTAINER_NAME) \
 		-it $(CONTAINER_NAME)
