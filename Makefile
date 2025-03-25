@@ -2,21 +2,16 @@ TOP ?= $(shell git rev-parse --show-toplevel)
 include $(TOP)/Makefile.common
 include $(TOP)/Makefile.env
 
-include $(BP_TOOLS_MK_DIR)/Makefile.tools
-include $(BP_TOOLS_MK_DIR)/Makefile.docker
+include $(BP_MK_DIR)/Makefile.tools
 
 checkout: ## checkout submodules
-	@$(MKDIR) -p $(BP_TOOLS_BIN_DIR) \
-		$(BP_TOOLS_LIB_DIR) \
-		$(BP_TOOLS_INCLUDE_DIR) \
-		$(BP_TOOLS_TOUCH_DIR) \
-		$(BP_TOOLS_WORK_DIR)
+checkout: ## checkout submodules
+	$(call bsg_fn_mksubdir,$(HOOK_CHECKOUT_DIRS))
 	# Synchronize any pending updates
 	@$(GIT) submodule sync
 	@$(GIT) submodule init
 	# Disable long checkouts
-	@$(GIT) -C $(BP_TOOLS_YSLANG_DIR) config --local submodule.tests/third_party/croc.update none
-	@$(GIT) -C $(BP_TOOLS_YSLANG_DIR) config --local submodule.tests/third_party/yosys.update none
+	@$(call bsg_fn_disable_submodules,$(HOOK_DISABLE_SUBMODULES))
 	# Do the checkout
 	@$(GIT) submodule update
 
@@ -36,7 +31,7 @@ tools: tools_lite
 
 tools_bsg: ## additional tools for BSG users
 tools_bsg: tools 
-	# Fails on first build attempt
+	# Fails on first build attempt for some reason
 	@$(MAKE) build.bsg_sv2v || $(MAKE) build.bsg_sv2v
 	@$(MAKE) build.bsg_fakeram
 
