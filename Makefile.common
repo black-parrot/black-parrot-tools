@@ -1,32 +1,26 @@
-#############################
-# Makefile functions
-#############################
-# Saves initial values so that we can filter them later
-VARS_OLD := $(.VARIABLES)
 
 # Global Makefile settings
+# Saves initial values so that we can filter them later
+# MUST BE FIRST
+VARS_OLD := $(.VARIABLES)
 SHELL := /bin/bash
 EXTRAMAKEFLAGS += --warn-undefined-variables
 MAKEFLAGS += $(EXTRAMAKEFLAGS)
-
-# Global help target
 .DEFAULT_GOAL: help
-.PHONY: help
-help: ## prints this message
-	@egrep -h '\s##\s' $(MAKEFILE_LIST) | sort \
-		| awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m  %-30s\033[0m %s\n", $$1, $$2}'
 
-# Global reset
-.PHONY: bleach_all
-bleach_all: ## wipes the whole repo clean. Use with caution
-	@$(CD) $(BP_TOOLS_DIR); git clean -ffdx; git submodule deinit -f .
+#############################
+# Environment detection
+#############################
+CENTOS7 := $(if $(findstring CentOS Linux release 7,$(shell cat /etc/centos-release 2>/dev/null)),1,0)
+ARMV7 := $(if $(findstring armv7l,$(shell /usr/bin/arch)),1,0)
+AARCH64 := $(if $(findstring aarch64,$(shell /usr/bin/arch)),1,0)
+ARM := $(if $(ARMV7),1,$(if $(AARCH64),1,0))
+UBUNTU24 := $(if $(findstring Ubuntu 24,$(shell lsb_release -a 2>/dev/null)),1,0)
 
-define bsg_fn_upper
-$(shell echo $(1) | tr a-z A-Z)
-endef
-define bsg_fn_lower
-$(shell echo $(1) | tr A-Z a-z)
-endef
+#############################
+# Makefile variables templates
+#############################
+
 bsg_var_blank :=
 define bsg_var_newline
 
@@ -34,6 +28,17 @@ $(bsg_var_blank)
 endef
 
 bsg_var_percent := %
+
+#############################
+# Makefile function templates
+#############################
+define bsg_fn_upper
+$(shell echo $(1) | tr a-z A-Z)
+endef
+
+define bsg_fn_lower
+$(shell echo $(1) | tr A-Z a-z)
+endef
 
 define bsg_fn_patch_if_new
 	$(eval apply_stage_patch := git apply --ignore-whitespace --ignore-space-change)
@@ -59,6 +64,54 @@ define bsg_fn_patch_if_new
 		fi \
 	done
 endef
+
+define bsg_fn_mksubdir
+	$(eval hookdirs := $(1))
+	$(eval newvars := $(filter-out $(VARS_OLD),$(.VARIABLES)))
+	$(eval bpvars := $(filter BP_%,$(newvars)))
+	$(eval newdirs := $(foreach root,$(hookdirs),\
+		$(foreach var,$(bpvars),\
+			$(if $(filter $(root)%,$($(var))),\
+				$($(var))))\
+		)\
+	)
+	mkdir -p $(hookdirs)
+	mkdir -p $(newdirs)
+endef
+
+define bsg_fn_disable_submodules
+	$(eval subs := $(1))
+	for t in $(subs); do \
+		d=$$(echo $$t | cut -d '@' -f 1); \
+		s=$$(echo $$t | cut -d '@' -f 2); \
+		echo "Disabling checkout for $$d/$$s"; \
+		git -C $$d config --local submodule.$$s.update none; \
+		git -C $$d submodule sync --recursive; \
+	done
+endef
+
+define bsg_fn_info
+	$(eval $@_msg = $(1))
+	$(eval $@_prefix = "BSG-INFO: ")
+	echo "${$@_prefix} ${$@_msg}";
+endef
+
+define bsg_fn_warn
+	$(eval $@_msg = $(1))
+	$(eval $@_prefix = "BSG-WARN: ")
+	echo "${$@_prefix} ${$@_msg}";
+endef
+
+define bsg_fn_error
+	$(eval $@_msg = $(1))
+	$(eval $@_prefix = "BSG-ERROR: ")
+	echo "${$@_prefix} ${$@_msg}"; \
+	exit -1;
+endef
+
+#############################
+# Makefile target templates
+#############################
 
 define bsg_tgt_build_tag
 	$(eval name := $(1))
@@ -105,15 +158,6 @@ $(patch_tag):
 	touch $(patch_tag)
 endef
 
-define bsg_tgt_build_if_missing
-	$(eval name := $(1))
-	$(eval src_dir := $(2))
-	$(eval touch_dir := $(3))
-	$(eval patch_dir := $(4))
-	$(eval tag := any)
-	$(call bsg_tgt_build_tag,$(name),$(src_dir),$(touch_dir),$(patch_dir),$(tag))
-endef
-
 define bsg_tgt_build_if_new
 	$(eval name := $(1))
 	$(eval src_dir := $(2))
@@ -123,49 +167,111 @@ define bsg_tgt_build_if_new
 	$(call bsg_tgt_build_tag,$(name),$(src_dir),$(touch_dir),$(patch_dir),$(tag))
 endef
 
-define bsg_fn_info
-	$(eval $@_msg = $(1))
-	$(eval $@_prefix = "BSG-INFO: ")
-	echo "${$@_prefix} ${$@_msg}";
-endef
-
-define bsg_fn_warn
-	$(eval $@_msg = $(1))
-	$(eval $@_prefix = "BSG-WARN: ")
-	echo "${$@_prefix} ${$@_msg}";
-endef
-
-define bsg_fn_error
-	$(eval $@_msg = $(1))
-	$(eval $@_prefix = "BSG-ERROR: ")
-	echo "${$@_prefix} ${$@_msg}"; \
-	exit -1;
+define bsg_tgt_build_if_missing
+	$(eval name := $(1))
+	$(eval src_dir := $(2))
+	$(eval touch_dir := $(3))
+	$(eval patch_dir := $(4))
+	$(eval tag := any)
+	$(call bsg_tgt_build_tag,$(name),$(src_dir),$(touch_dir),$(patch_dir),$(tag))
 endef
 
 #############################
-# Paths
+# Makefile targets
 #############################
-BP_TOOLS_DIR         ?= $(TOP)
-BP_TOOLS_PATCH_DIR   ?= $(BP_TOOLS_DIR)/patches
-BP_TOOLS_INSTALL_DIR ?= $(BP_TOOLS_DIR)/install
-BP_TOOLS_DOCKER_DIR  ?= $(BP_TOOLS_DIR)/docker
-BP_TOOLS_MK_DIR      ?= $(BP_TOOLS_DIR)/mk
-BP_TOOLS_BIN_DIR     ?= $(BP_TOOLS_INSTALL_DIR)/bin
-BP_TOOLS_LIB_DIR     ?= $(BP_TOOLS_INSTALL_DIR)/lib
-BP_TOOLS_INCLUDE_DIR ?= $(BP_TOOLS_INSTALL_DIR)/include
-BP_TOOLS_SHARE_DIR   ?= $(BP_TOOLS_INSTALL_DIR)/share
-BP_TOOLS_TOUCH_DIR   ?= $(BP_TOOLS_INSTALL_DIR)/touchfiles
-BP_TOOLS_WORK_DIR    ?= $(BP_TOOLS_INSTALL_DIR)/work
+# Global help target
+.PHONY: help
+help: ## prints this message
+	@egrep -h '\s##\s' $(MAKEFILE_LIST) | sort \
+		| awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m  %-30s\033[0m %s\n", $$1, $$2}'
 
-BP_TOOLS_AXE_DIR       ?= $(BP_TOOLS_DIR)/axe
-BP_TOOLS_FAKERAM_DIR   ?= $(BP_TOOLS_DIR)/bsg_fakeram
-BP_TOOLS_SV2V_DIR      ?= $(BP_TOOLS_DIR)/bsg_sv2v
-BP_TOOLS_DROMAJO_DIR   ?= $(BP_TOOLS_DIR)/dromajo
-BP_TOOLS_SPIKE_DIR     ?= $(BP_TOOLS_DIR)/riscv-isa-sim
-BP_TOOLS_SURELOG_DIR   ?= $(BP_TOOLS_DIR)/Surelog
-BP_TOOLS_VERILATOR_DIR ?= $(BP_TOOLS_DIR)/verilator
-BP_TOOLS_YOSYS_DIR     ?= $(BP_TOOLS_DIR)/yosys
-BP_TOOLS_YSLANG_DIR    ?= $(BP_TOOLS_DIR)/yosys-slang
+# Global reset
+.PHONY: bleach_all
+bleach_all: ## wipes the whole repo clean. Use with caution
+	@git -C "$(git rev-parse --show-toplevel)" submodule deinit -f .
+	@git -C "$(git rev-parse --show-toplevel)" clean -ffdx
 
-BSG_CADENV_DIR         ?= $(BP_TOOLS_DIR)/bsg_cadenv
+# Global checkout
+.PHONY: checkout
+checkout: ## checkout submodules
+	@$(call bsg_fn_mksubdir,$(HOOK_CHECKOUT_DIRS))
+	# Synchronize any pending updates
+	@git submodule sync
+	@git submodule init
+	# Disable long checkouts
+	$(call bsg_fn_disable_submodules,$(HOOK_DISABLE_SUBMODULES))
+	# Do the checkout
+	@git submodule update
+
+##########################################################
+## Cad environment
+##########################################################
+
+## Override CAD tool paths if needed
+VCS       ?= vcs
+URG       ?= urg
+VERILATOR ?= verilator
+DC_SHELL  ?= dc_shell
+VIVADO    ?= vivado
+_DVE      ?= dve
+GTKWAVE   ?= gtkwave
+YOSYS     ?= yosys
+## Specify license path if needed
+VCS_HOME        ?=
+LM_LICENSE_FILE ?=
+
+ifneq ($(MAKECMDGOALS),help)
+BSG_CADENV_DIR ?= bsg_cadenv
+include $(BSG_CADENV_DIR)/cadenv.mk
+%/cadenv.mk:
+	# BSG users leverage a machine-specific cadenv
+	#   Here, we add sourcing to get these variables as well
+	@$(eval export CADENV_URL := git@github.com:bespoke-silicon-group/bsg_cadenv)
+	# Recursive make to include the new fragment
+	@if [ -f "$(BSG_CADENV_DIR)/cadenv.mk" ]; then \
+		echo "bsg_cadenv already exists"; \
+	elif [[ ! -z $$(git ls-remote --exit-code $${CADENV_URL} HEAD 2> /dev/null) ]]; then \
+		git clone --recurse-submodules $${CADENV_URL} $(@D); \
+	else \
+		echo "bsg_cadenv not found"; \
+		mkdir -p $(@D); \
+		touch $@; \
+	fi
+	@echo "Successfully built $@!"
+endif
+
+##########################################################
+## Other tools
+##########################################################
+CAT       ?= cat
+CMAKE     ?= $(if $(shell which cmake3),cmake3,cmake)
+CD        ?= cd
+CP        ?= cp
+CURL      ?= curl
+DIFF      ?= diff
+DOCKER    ?= docker
+ECHO      ?= echo
+ENVSUBST  ?= envsubst
+EXIT      ?= exit
+FIND      ?= find
+GCC       ?= gcc
+GIT       ?= git
+GREP      ?= grep
+MKDIR     ?= mkdir
+MV        ?= mv
+PRINTF    ?= printf
+PYTHON    ?= $(if $(shell which python3),python3,python)
+RM        ?= rm
+RMRF      ?= rm -rf
+SED       ?= sed
+STTY      ?= stty
+SYMLINK   ?= ln -nsf
+TAIL      ?= tail
+TAR       ?= tar
+TEE       ?= tee
+TEST      ?= test
+TOUCH     ?= touch
+WCOUNT    ?= wc -l
+WGET      ?= wget
+XXD       ?= xxd
 

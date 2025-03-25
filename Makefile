@@ -2,23 +2,7 @@ TOP ?= $(shell git rev-parse --show-toplevel)
 include $(TOP)/Makefile.common
 include $(TOP)/Makefile.env
 
-include $(BP_TOOLS_MK_DIR)/Makefile.tools
-include $(BP_TOOLS_MK_DIR)/Makefile.docker
-
-checkout: ## checkout submodules
-	@$(MKDIR) -p $(BP_TOOLS_BIN_DIR) \
-		$(BP_TOOLS_LIB_DIR) \
-		$(BP_TOOLS_INCLUDE_DIR) \
-		$(BP_TOOLS_TOUCH_DIR) \
-		$(BP_TOOLS_WORK_DIR)
-	# Synchronize any pending updates
-	@$(GIT) submodule sync
-	@$(GIT) submodule init
-	# Disable long checkouts
-	@$(GIT) -C $(BP_TOOLS_YSLANG_DIR) config --local submodule.tests/third_party/croc.update none
-	@$(GIT) -C $(BP_TOOLS_YSLANG_DIR) config --local submodule.tests/third_party/yosys.update none
-	# Do the checkout
-	@$(GIT) submodule update
+include $(BP_MK_DIR)/Makefile.*
 
 tools_lite: ## minimal set of simulation tools
 tools_lite: checkout
@@ -36,7 +20,7 @@ tools: tools_lite
 
 tools_bsg: ## additional tools for BSG users
 tools_bsg: tools 
-	# Fails on first build attempt
+	# Fails on first build attempt for some reason
 	@$(MAKE) build.bsg_sv2v || $(MAKE) build.bsg_sv2v
 	@$(MAKE) build.bsg_fakeram
 
