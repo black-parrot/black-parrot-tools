@@ -6,6 +6,7 @@ VARS_OLD := $(.VARIABLES)
 SHELL := /bin/bash
 EXTRAMAKEFLAGS += --warn-undefined-variables
 MAKEFLAGS += $(EXTRAMAKEFLAGS)
+.DEFAULT_GOAL: help
 
 #############################
 # Environment detection
@@ -17,31 +18,9 @@ ARM := $(if $(ARMV7),1,$(if $(AARCH64),1,0))
 UBUNTU24 := $(if $(findstring Ubuntu 24,$(shell lsb_release -a 2>/dev/null)),1,0)
 
 #############################
-# Makefile functions
+# Makefile variables templates
 #############################
 
-# Global help target
-.DEFAULT_GOAL: help
-.PHONY: help
-help: ## prints this message
-	@egrep -h '\s##\s' $(MAKEFILE_LIST) | sort \
-		| awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m  %-30s\033[0m %s\n", $$1, $$2}'
-
-# Global reset
-.PHONY: bleach_all
-bleach_all: ## wipes the whole repo clean. Use with caution
-	@git -C "$(git rev-parse --show-toplevel)" submodule deinit -f .
-	@git -C "$(git rev-parse --show-toplevel)" clean -ffdx
-
-#############################
-# Makefile function templates
-#############################
-define bsg_fn_upper
-$(shell echo $(1) | tr a-z A-Z)
-endef
-define bsg_fn_lower
-$(shell echo $(1) | tr A-Z a-z)
-endef
 bsg_var_blank :=
 define bsg_var_newline
 
@@ -49,6 +28,17 @@ $(bsg_var_blank)
 endef
 
 bsg_var_percent := %
+
+#############################
+# Makefile function templates
+#############################
+define bsg_fn_upper
+$(shell echo $(1) | tr a-z A-Z)
+endef
+
+define bsg_fn_lower
+$(shell echo $(1) | tr A-Z a-z)
+endef
 
 define bsg_fn_patch_if_new
 	$(eval apply_stage_patch := git apply --ignore-whitespace --ignore-space-change)
@@ -74,6 +64,54 @@ define bsg_fn_patch_if_new
 		fi \
 	done
 endef
+
+define bsg_fn_mksubdir
+	$(eval hookdirs := $(1))
+	$(eval newvars := $(filter-out $(VARS_OLD),$(.VARIABLES)))
+	$(eval bpvars := $(filter BP_%,$(newvars)))
+	$(eval newdirs := $(foreach root,$(hookdirs),\
+		$(foreach var,$(bpvars),\
+			$(if $(filter $(root)%,$($(var))),\
+				$($(var))))\
+		)\
+	)
+	mkdir -p $(hookdirs)
+	mkdir -p $(newdirs)
+endef
+
+define bsg_fn_disable_submodules
+	$(eval subs := $(1))
+	for t in $(subs); do \
+		d=$$(echo $$t | cut -d '@' -f 1); \
+		s=$$(echo $$t | cut -d '@' -f 2); \
+		echo "Disabling checkout for $$d/$$s"; \
+		git -C $$d config --local submodule.$$s.update none; \
+		git -C $$d submodule sync --recursive; \
+	done
+endef
+
+define bsg_fn_info
+	$(eval $@_msg = $(1))
+	$(eval $@_prefix = "BSG-INFO: ")
+	echo "${$@_prefix} ${$@_msg}";
+endef
+
+define bsg_fn_warn
+	$(eval $@_msg = $(1))
+	$(eval $@_prefix = "BSG-WARN: ")
+	echo "${$@_prefix} ${$@_msg}";
+endef
+
+define bsg_fn_error
+	$(eval $@_msg = $(1))
+	$(eval $@_prefix = "BSG-ERROR: ")
+	echo "${$@_prefix} ${$@_msg}"; \
+	exit -1;
+endef
+
+#############################
+# Makefile target templates
+#############################
 
 define bsg_tgt_build_tag
 	$(eval name := $(1))
@@ -120,27 +158,13 @@ $(patch_tag):
 	touch $(patch_tag)
 endef
 
-define bsg_fn_mksubdir
-	$(eval hookdirs := $(1))
-	$(eval newvars := $(filter-out $(VARS_OLD),$(.VARIABLES)))
-	$(eval bpvars := $(filter BP_%,$(newvars)))
-	$(eval newdirs := $(foreach root,$(hookdirs),\
-		$(foreach var,$(bpvars),\
-			$(if $(filter $(root)%,$($(var))),\
-				$($(var))))\
-		)\
-	)
-	mkdir -p $(hookdirs)
-	mkdir -p $(newdirs)
-endef
-
-define bsg_fn_disable_submodules
-	$(eval subs := $(1))
-    for t in $(subs); do \
-        d=$$(echo $$t | cut -d '@' -f 1); \
-        s=$$(echo $$t | cut -d '@' -f 2); \
-        git -C $$d config --local submodule.$$s.update none; \
-    done
+define bsg_tgt_build_if_new
+	$(eval name := $(1))
+	$(eval src_dir := $(2))
+	$(eval touch_dir := $(3))
+	$(eval patch_dir := $(4))
+	$(eval tag := $(shell cd $(src_dir); git rev-parse HEAD))
+	$(call bsg_tgt_build_tag,$(name),$(src_dir),$(touch_dir),$(patch_dir),$(tag))
 endef
 
 define bsg_tgt_build_if_missing
@@ -152,33 +176,32 @@ define bsg_tgt_build_if_missing
 	$(call bsg_tgt_build_tag,$(name),$(src_dir),$(touch_dir),$(patch_dir),$(tag))
 endef
 
-define bsg_tgt_build_if_new
-	$(eval name := $(1))
-	$(eval src_dir := $(2))
-	$(eval touch_dir := $(3))
-	$(eval patch_dir := $(4))
-	$(eval tag := $(shell cd $(src_dir); git rev-parse HEAD))
-	$(call bsg_tgt_build_tag,$(name),$(src_dir),$(touch_dir),$(patch_dir),$(tag))
-endef
+#############################
+# Makefile targets
+#############################
+# Global help target
+.PHONY: help
+help: ## prints this message
+	@egrep -h '\s##\s' $(MAKEFILE_LIST) | sort \
+		| awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m  %-30s\033[0m %s\n", $$1, $$2}'
 
-define bsg_fn_info
-	$(eval $@_msg = $(1))
-	$(eval $@_prefix = "BSG-INFO: ")
-	echo "${$@_prefix} ${$@_msg}";
-endef
+# Global reset
+.PHONY: bleach_all
+bleach_all: ## wipes the whole repo clean. Use with caution
+	@git -C "$(git rev-parse --show-toplevel)" submodule deinit -f .
+	@git -C "$(git rev-parse --show-toplevel)" clean -ffdx
 
-define bsg_fn_warn
-	$(eval $@_msg = $(1))
-	$(eval $@_prefix = "BSG-WARN: ")
-	echo "${$@_prefix} ${$@_msg}";
-endef
-
-define bsg_fn_error
-	$(eval $@_msg = $(1))
-	$(eval $@_prefix = "BSG-ERROR: ")
-	echo "${$@_prefix} ${$@_msg}"; \
-	exit -1;
-endef
+# Global checkout
+.PHONY: checkout
+checkout: ## checkout submodules
+	@$(call bsg_fn_mksubdir,$(HOOK_CHECKOUT_DIRS))
+	# Synchronize any pending updates
+	@git submodule sync
+	@git submodule init
+	# Disable long checkouts
+	$(call bsg_fn_disable_submodules,$(HOOK_DISABLE_SUBMODULES))
+	# Do the checkout
+	@git submodule update
 
 ##########################################################
 ## Cad environment

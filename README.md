@@ -9,12 +9,17 @@ However, the tools can be built directly here as well.
 For most users, the following makefile targets will be the most useful:
 
 
-    make bleach_all;     # wipes the whole repo clean. Use with caution
-    make help;           # prints information about targets
-    make checkout;       # checkout submodules
     make tools_lite;     # minimal set of simulation tools
     make tools;          # standard tools
     make tools_bsg;      # additional tools for BSG users
+
+
+There are also common Makefile targets to maintain the repository:
+
+
+    make checkout;       # checkout submodules. Should be done before building tools
+    make bleach_all;     # wipes the whole repo clean. Use with caution
+    make help;           # prints information about documented targets
 
 
 For advanced usage or debugging, standardized targets are provided for each tool.

@@ -2,18 +2,7 @@ TOP ?= $(shell git rev-parse --show-toplevel)
 include $(TOP)/Makefile.common
 include $(TOP)/Makefile.env
 
-include $(BP_MK_DIR)/Makefile.tools
-
-checkout: ## checkout submodules
-checkout: ## checkout submodules
-	$(call bsg_fn_mksubdir,$(HOOK_CHECKOUT_DIRS))
-	# Synchronize any pending updates
-	@$(GIT) submodule sync
-	@$(GIT) submodule init
-	# Disable long checkouts
-	@$(call bsg_fn_disable_submodules,$(HOOK_DISABLE_SUBMODULES))
-	# Do the checkout
-	@$(GIT) submodule update
+include $(BP_MK_DIR)/Makefile.*
 
 tools_lite: ## minimal set of simulation tools
 tools_lite: checkout
