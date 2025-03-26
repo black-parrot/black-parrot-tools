@@ -40,48 +40,23 @@ define bsg_fn_lower
 $(shell echo $(1) | tr A-Z a-z)
 endef
 
-define bsg_fn_patch_if_new
-	$(eval apply_stage_patch := git apply --ignore-whitespace --ignore-space-change)
-	$(eval apply_commit_patch := git am --ignore-whitespace --ignore-space-change)
-	$(eval check_patch := $(apply_stage_patch) --check --reverse)
-	$(eval src_root := $(1))
-	$(eval patch_root := $(2))
-	$(eval patch_list := $(wildcard $(patch_root)/*.patch))
-	$(eval patch_is_top := $(findstring patches,$(lastword $(subst /, ,$(dir $(patch_root))))))
-	for p in $(patch_list); \
-	do \
-		echo "Checking if patch $$p is applicable"; \
-		cd $(src_root); $(check_patch) $$p && continue; \
-		echo "Patch is unapplied..."; \
-		if [ ! -z "$$patch_is_top" ]; then \
-			echo "Applying patch to sub-directory $(src_root);" \
-			cd $(src_root); $(apply_commit_patch) $$p; \
-			echo "Patch applied!"; \
-		else \
-			echo "Applying patch to top-level $(src_root);" \
-			cd $(src_root); $(apply_stage_patch) $$p; \
-			echo "Patch applied!"; \
-		fi \
-	done
-endef
-
 define bsg_fn_mksubdir
-	$(eval hookdirs := $(1))
-	$(eval newvars := $(filter-out $(VARS_OLD),$(.VARIABLES)))
-	$(eval bpvars := $(filter BP_%,$(newvars)))
-	$(eval newdirs := $(foreach root,$(hookdirs),\
-		$(foreach var,$(bpvars),\
+	$(eval $@_hookdirs := $(1))
+	$(eval $@_newvars := $(filter-out $(VARS_OLD),$(.VARIABLES)))
+	$(eval $@_bpvars := $(filter BP_%,$($@_newvars)))
+	$(eval $@_newdirs := $(foreach root,$($@_hookdirs),\
+		$(foreach var,$($@_bpvars),\
 			$(if $(filter $(root)%,$($(var))),\
 				$($(var))))\
 		)\
 	)
-	mkdir -p $(hookdirs)
-	mkdir -p $(newdirs)
+	mkdir -p ${$@_hookdirs}
+	mkdir -p ${$@_newdirs}
 endef
 
 define bsg_fn_disable_submodules
-	$(eval subs := $(1))
-	for t in $(subs); do \
+	$(eval $@_subs := $(1))
+	for t in ${$@_subs}; do \
 		d=$$(echo $$t | cut -d '@' -f 1); \
 		s=$$(echo $$t | cut -d '@' -f 2); \
 		echo "Disabling checkout for $$d/$$s"; \
@@ -93,69 +68,85 @@ endef
 define bsg_fn_info
 	$(eval $@_msg = $(1))
 	$(eval $@_prefix = "BSG-INFO: ")
-	echo "${$@_prefix} ${$@_msg}";
+	echo "${$@_prefix} ${$@_msg}"
 endef
 
 define bsg_fn_warn
 	$(eval $@_msg = $(1))
 	$(eval $@_prefix = "BSG-WARN: ")
-	echo "${$@_prefix} ${$@_msg}";
+	echo "${$@_prefix} ${$@_msg}"
 endef
 
 define bsg_fn_error
 	$(eval $@_msg = $(1))
 	$(eval $@_prefix = "BSG-ERROR: ")
-	echo "${$@_prefix} ${$@_msg}"; \
-	exit -1;
+	echo "${$@_prefix} ${$@_msg}"
+	exit -1
 endef
 
 #############################
 # Makefile target templates
 #############################
 
-define bsg_tgt_build_tag
+define bsg_tgt_patch_tag
 	$(eval name := $(1))
 	$(eval src_dir := $(2))
 	$(eval touch_dir := $(3))
 	$(eval patch_dir := $(4))
-	$(eval tag := $(5))
 	$(eval patch_tag := $(touch_dir)/$(name).patch.$(tag))
-	$(eval build_tag := $(touch_dir)/$(name).build.$(tag))
-	$(eval patch_root := $(patch_dir)/$(lastword $(src_dir)))
 	$(eval patch_target := patch.$(name))
 	$(eval repatch_target := repatch.$(name))
+$(patch_target): | $(patch_tag)
+$(repatch_target):
+	@rm -f $(touch_dir)/$(name).patch.*
+	@if [ -f $(src_dir)/.git ]; then \
+		git submodule deinit -f $(src_dir); \
+		git submodule init $(src_dir); \
+		git submodule update $(src_dir); \
+	fi
+	@+$(MAKE) $(patch_tag)
+$(patch_tag):
+	$(eval src := $(shell basename $(src_dir)))
+	$(eval patch_root := $(patch_dir)/$(src))
+	$(eval patch_files := $(shell find $(patch_root) -name "*.patch" 2>/dev/null))
+	$(eval apply_patch := git apply --ignore-whitespace --ignore-space-change)
+	$(eval check_patch := $(apply_patch) --check --reverse)
+	@if [ -f $(src_dir)/.git ]; then \
+		echo "Synchronizing submodules for $(name)"; \
+		git -C $(src_dir) submodule sync --recursive; \
+		echo "Checking out submodules for $(name)"; \
+		git -C $(src_dir) submodule update --init --recursive; \
+	fi
+	@# For some reason the bash for loop doesn't work here
+	@echo "Applying patches $(patch_files)"
+	@$(foreach p,$(patch_files),\
+		$(apply_patch) $(p) --directory $(dir $(subst $(patch_dir)/,,$(p)));\
+	)
+	@echo "Checking patches $(patch_files)"
+	@$(foreach p,$(patch_files),\
+		$(check_patch) $(p) --directory $(dir $(subst $(patch_dir)/,,$(p)));\
+	)
+	@touch $$@
+endef
+
+define bsg_tgt_build_tag
+	$(eval name := $(1))
+	$(eval src_dir := $(2))
+	$(eval touch_dir := $(3))
+	$(eval tag := $(5))
+	$(eval build_tag := $(touch_dir)/$(name).build.$(tag))
 	$(eval external_target := build.$(name))
 	$(eval rebuild_target := rebuild.$(name))
 	$(eval internal_target := $(src_dir)/.$(name)_build)
 	$(eval MAKEFLAGS := $(filter-out $(EXTRAMAKEFLAGS),$(MAKEFLAGS)))
 $(external_target): | $(build_tag)
 $(rebuild_target):
-	rm -f $(touch_dir)/$(name).build.*
-	+$(MAKE) $(build_tag)
-$(build_tag): | $(patch_tag)
-	+$(MAKE) $(patch_target)
-	+$(MAKE) $(internal_target)
-	echo "Build of $(name) successful; ignore errors"
-	touch $(build_tag)
-$(patch_target): | $(patch_tag)
-$(repatch_target):
-	rm -f $(touch_dir)/$(name).patch.*
-	if [ -f $(src_dir)/.git ]; then \
-		git submodule deinit -f $(src_dir); \
-		git submodule init $(src_dir); \
-		git submodule update $(src_dir); \
-	fi
-	+$(MAKE) $(patch_tag)
-$(patch_tag):
-	if [ -f $(src_dir)/.git ]; then \
-		echo "Synchronizing submodules for $(1)"; \
-		git -C $(src_dir) submodule sync --recursive; \
-		echo "Checking out submodules for $(1)"; \
-		git -C $(src_dir) submodule update --init --recursive; \
-	fi
-	$(call bsg_fn_patch_if_new,$(src_dir),$(patch_root))
-	echo "Patching successful; ignore errors"
-	touch $(patch_tag)
+	@rm -f $(touch_dir)/$(name).build.*
+	@+$(MAKE) $(build_tag)
+$(build_tag):
+	@+$(MAKE) $(internal_target)
+	@echo "Build of $(name) successful; ignore errors"
+	@touch $$@
 endef
 
 define bsg_tgt_build_if_new
@@ -164,7 +155,8 @@ define bsg_tgt_build_if_new
 	$(eval touch_dir := $(3))
 	$(eval patch_dir := $(4))
 	$(eval tag := $(shell cd $(src_dir); git rev-parse HEAD))
-	$(call bsg_tgt_build_tag,$(name),$(src_dir),$(touch_dir),$(patch_dir),$(tag))
+	$(eval $(call bsg_tgt_patch_tag,$(name),$(src_dir),$(touch_dir),$(patch_dir),$(tag)))
+	$(eval $(call bsg_tgt_build_tag,$(name),$(src_dir),$(touch_dir),$(patch_dir),$(tag)))
 endef
 
 define bsg_tgt_build_if_missing
@@ -173,7 +165,8 @@ define bsg_tgt_build_if_missing
 	$(eval touch_dir := $(3))
 	$(eval patch_dir := $(4))
 	$(eval tag := any)
-	$(call bsg_tgt_build_tag,$(name),$(src_dir),$(touch_dir),$(patch_dir),$(tag))
+	$(eval $(call bsg_tgt_patch_tag,$(name),$(src_dir),$(touch_dir),$(patch_dir),$(tag)))
+	$(eval $(call bsg_tgt_build_tag,$(name),$(src_dir),$(touch_dir),$(patch_dir),$(tag)))
 endef
 
 #############################
@@ -199,7 +192,7 @@ checkout: ## checkout submodules
 	@git submodule sync
 	@git submodule init
 	# Disable long checkouts
-	$(call bsg_fn_disable_submodules,$(HOOK_DISABLE_SUBMODULES))
+	@$(call bsg_fn_disable_submodules,$(HOOK_DISABLE_SUBMODULES))
 	# Do the checkout
 	@git submodule update
 
