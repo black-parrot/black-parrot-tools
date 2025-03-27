@@ -1,5 +1,5 @@
 
-$(eval $(call bsg_tgt_build_if_missing,boost,$(BP_WORK_DIR),$(BP_TOUCH_DIR),$(BP_PATCH_DIR)))
+$(eval $(call bsg_tgt_build_submodule,boost,,$(BP_TOUCH_DIR),$(BP_PATCH_DIR),$(BP_WORK_DIR)))
 %/.boost_build:
 	@$(eval BOOST_VERSION := 1.82.0)
 	@$(eval BOOST := boost_$(subst .,_,$(BOOST_VERSION)))
@@ -9,82 +9,69 @@ $(eval $(call bsg_tgt_build_if_missing,boost,$(BP_WORK_DIR),$(BP_TOUCH_DIR),$(BP
 	@$(eval CONFIG_H := $(shell python -c "import sysconfig; print(sysconfig.get_config_h_filename());"))
 	@$(eval CONFIG_DIR := $(dir $(CONFIG_H)))
 	@$(eval export CPLUS_INCLUDE_PATH := $(CONFIG_DIR):$(CPLUS_INCLUDE_PATH))
-	@$(CD) $(@D); \
-		$(WGET) -qO- $(BOOST_DOWNLOAD) | $(TAR) xzv
-	@$(CD) $(@D)/$(BOOST); \
-		./bootstrap.sh --prefix=$(BP_INSTALL_DIR)
-	@$(CD) $(@D)/$(BOOST); \
-		./b2 --prefix=$(BP_INSTALL_DIR) \
-			toolset=gcc \
-			install
+	@$(WGET) -qO- $(BOOST_DOWNLOAD) | $(TAR) xzv -C $(@D) --strip-components=1
+	@$(CD) $(@D); ./bootstrap.sh --prefix=$(BP_INSTALL_DIR)
+	@$(CD) $(@D); ./b2 --prefix=$(BP_INSTALL_DIR) toolset=gcc install
 
-$(eval $(call bsg_tgt_build_if_new,axe,$(BP_AXE_DIR),$(BP_TOUCH_DIR),$(BP_PATCH_DIR)))
+$(eval $(call bsg_tgt_build_submodule,axe,$(BP_AXE_DIR),$(BP_TOUCH_DIR),$(BP_PATCH_DIR),$(BP_WORK_DIR)))
 %/.axe_build:
-	@$(CD) $(@D)/src; ./make.sh
-	@$(CP) $(@D)/src/axe $(BP_BIN_DIR)
+	@$(CD) $</src; ./make.sh
+	@$(CP) $</src/axe $(BP_BIN_DIR)
 
-$(eval $(call bsg_tgt_build_if_new,bsg_fakeram,$(BP_FAKERAM_DIR),$(BP_TOUCH_DIR),$(BP_PATCH_DIR)))
+$(eval $(call bsg_tgt_build_submodule,bsg_fakeram,$(BP_FAKERAM_DIR),$(BP_TOUCH_DIR),$(BP_PATCH_DIR),$(BP_WORK_DIR)))
 %/.bsg_fakeram_build:
-	@$(MAKE) -j1 -C $(@D) tools
+	@$(MAKE) -j1 -C $< tools
 
-$(eval $(call bsg_tgt_build_if_new,bsg_sv2v,$(BP_SV2V_DIR),$(BP_TOUCH_DIR),$(BP_PATCH_DIR)))
+$(eval $(call bsg_tgt_build_submodule,bsg_sv2v,$(BP_SV2V_DIR),$(BP_TOUCH_DIR),$(BP_PATCH_DIR),$(BP_WORK_DIR)))
 %/.bsg_sv2v_build:
 	@$(eval PYVERILOG_URL := https://github.com/PyHDI/Pyverilog.git)
 	@$(eval PYVERILOG_VER := 1.1.3)
 	@$(eval PYVERILOG_DIR := $(@D)/Pyverilog)
 	@$(RMRF) $(PYVERILOG_DIR)
 	@$(GIT) clone -b $(PYVERILOG_VER) $(PYVERILOG_URL) $(PYVERILOG_DIR)
-	@$(CD) $(PYVERILOG_DIR); $(GIT) apply $(@D)/patches/pyverilog_add_wirelist_reglist.patch
-	@$(CD) $(PYVERILOG_DIR); $(GIT) apply $(@D)/patches/pyverilog_sensitivity_comp.patch
-	@$(CD) $(PYVERILOG_DIR); $(PYTHON) setup.py install
+	@$(GIT) -C $(PYVERILOG_DIR) apply $</patches/pyverilog_add_wirelist_reglist.patch
+	@$(GIT) -C $(PYVERILOG_DIR) apply $</patches/pyverilog_sensitivity_comp.patch
+	@$(PYTHON) $(PYVERILOG_DIR)/setup.py install
 
-$(eval $(call bsg_tgt_build_if_new,dromajo,$(BP_DROMAJO_DIR),$(BP_TOUCH_DIR),$(BP_PATCH_DIR)))
+$(eval $(call bsg_tgt_build_submodule,dromajo,$(BP_DROMAJO_DIR),$(BP_TOUCH_DIR),$(BP_PATCH_DIR),$(BP_WORK_DIR)))
 %/.dromajo_build:
-	@$(eval SOURCE_DIR := $(@D))
-	@$(eval BUILD_DIR := $(@D)/build)
-	@$(MKDIR) -p $(BUILD_DIR)
-	@$(CMAKE) -S $(SOURCE_DIR) -B $(BUILD_DIR) -DCMAKE_BUILD_TYPE=Release
-	@$(MAKE) -C $(BUILD_DIR)
-	@$(CP) $(BUILD_DIR)/dromajo $(BP_BIN_DIR)
-	@$(CP) $(BUILD_DIR)/libdromajo_cosim.a $(BP_LIB_DIR)
-	@$(CP) $(SOURCE_DIR)/include/* $(BP_INCLUDE_DIR)
-
-$(eval $(call bsg_tgt_build_if_new,spike,$(BP_SPIKE_DIR),$(BP_TOUCH_DIR),$(BP_PATCH_DIR)))
-%/.spike_build:
-	@$(CD) $(@D); \
-		./configure --prefix=$(BP_INSTALL_DIR) \
-		--without-boost --without-boost-asio --without-boost-regex; \
-		$(MAKE) && $(MAKE) install
-
-$(eval $(call bsg_tgt_build_if_new,surelog,$(BP_SURELOG_DIR),$(BP_TOUCH_DIR),$(BP_PATCH_DIR)))
-%/.surelog_build:
-	@$(eval BUILD_DIR := $(@D)/build)
-	@$(MKDIR) -p $(BUILD_DIR)
-	@$(CMAKE) -S $(@D) -B $(BUILD_DIR) -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=$(BP_INSTALL_DIR)
-	@$(CD) $(BUILD_DIR); \
-		$(MAKE) && $(MAKE) install
-
-$(eval $(call bsg_tgt_build_if_new,verilator,$(BP_VERILATOR_DIR),$(BP_TOUCH_DIR),$(BP_PATCH_DIR)))
-%/.verilator_build:
-	@$(CD) $(@D); \
-		autoconf; \
-		./configure --prefix=$(BP_INSTALL_DIR);
+	@$(CMAKE) -S $< -B $(@D) -DCMAKE_BUILD_TYPE=Release
 	@$(MAKE) -C $(@D)
-	@$(MAKE) -C $(@D) install
-	@$(CP) $(@D)/include/vltstd/svdpi.h $(BP_INCLUDE_DIR)
+	@$(CP) $(@D)/dromajo $(BP_BIN_DIR)
+	@$(CP) $(@D)/libdromajo_cosim.a $(BP_LIB_DIR)
+	@$(CP) $</include/* $(BP_INCLUDE_DIR)
 
-$(eval $(call bsg_tgt_build_if_new,yosys,$(BP_YOSYS_DIR),$(BP_TOUCH_DIR),$(BP_PATCH_DIR)))
+$(eval $(call bsg_tgt_build_submodule,spike,$(BP_SPIKE_DIR),$(BP_TOUCH_DIR),$(BP_PATCH_DIR),$(BP_WORK_DIR)))
+%/.spike_build:
+	@$(CD) $(@D); $</configure --prefix=$(BP_INSTALL_DIR) --srcdir=$< \
+		--without-boost --without-boost-asio --without-boost-regex
+	@$(MAKE) -C $(@D) install
+
+$(eval $(call bsg_tgt_build_submodule,surelog,$(BP_SURELOG_DIR),$(BP_TOUCH_DIR),$(BP_PATCH_DIR),$(BP_WORK_DIR)))
+%/.surelog_build:
+	@$(CMAKE) -S $< -B $(@D) -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=$(BP_INSTALL_DIR)
+	@$(MAKE) -C $(@D) install
+
+$(eval $(call bsg_tgt_build_submodule,verilator,$(BP_VERILATOR_DIR),$(BP_TOUCH_DIR),$(BP_PATCH_DIR),$(BP_WORK_DIR)))
+%/.verilator_build:
+	@$(CD) $(@D); $(AUTOCONF) -o ./configure $</configure.ac
+	@$(CD) $(@D); ./configure --prefix=$(BP_INSTALL_DIR) --srcdir=$<
+	@$(MAKE) -C $(@D) all
+	@$(MAKE) -C $(@D) install
+	@$(MAKE) -C $(@D) install-all
+
+$(eval $(call bsg_tgt_build_submodule,yosys,$(BP_YOSYS_DIR),$(BP_TOUCH_DIR),$(BP_PATCH_DIR),$(BP_WORK_DIR)))
 %/.yosys_build:
 	@$(eval export PREFIX := $(BP_INSTALL_DIR))
-	@$(CD) $(@D); \
-		$(MAKE) config-gcc && $(MAKE) && $(MAKE) install
+	@$(MAKE) -C $< config-gcc
+	@$(MAKE) -C $< install
 
-$(eval $(call bsg_tgt_build_if_new,yslang,$(BP_YSLANG_DIR),$(BP_TOUCH_DIR),$(BP_PATCH_DIR)))
-%/.yslang_build: build.yosys
+$(eval $(call bsg_tgt_build_submodule,yslang,$(BP_YSLANG_DIR),$(BP_TOUCH_DIR),$(BP_PATCH_DIR),$(BP_WORK_DIR)))
+%/.yslang_build:
 	@$(eval YOSYS_PLUGIN_DIR := $(BP_INSTALL_DIR)/share/yosys/plugins)
 	@$(eval export YOSYS_PREFIX := $(BP_INSTALL_DIR)/bin/)
+	@$(MAKE) build.yosys
+	@$(MAKE) -C $<
 	@$(MKDIR) -p $(YOSYS_PLUGIN_DIR)
-	@$(CD) $(@D); \
-		$(MAKE) build; \
-		$(CP) build/*.so $(YOSYS_PLUGIN_DIR)
+	@$(CP) $</build/*.so $(YOSYS_PLUGIN_DIR)
 
