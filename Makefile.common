@@ -88,14 +88,23 @@ endef
 # Makefile target templates
 #############################
 
-define bsg_tgt_patch_tag
+define bsg_tgt_build_tag
+	$(eval MAKEFLAGS := $(filter-out $(EXTRAMAKEFLAGS),$(MAKEFLAGS)))
 	$(eval name := $(1))
 	$(eval src_dir := $(2))
 	$(eval touch_dir := $(3))
 	$(eval patch_dir := $(4))
+	$(eval work_dir := $(5))
+	$(eval tag := $(6))
+	# patch targets
 	$(eval patch_tag := $(touch_dir)/$(name).patch.$(tag))
 	$(eval patch_target := patch.$(name))
 	$(eval repatch_target := repatch.$(name))
+	# build targets
+	$(eval build_tag := $(touch_dir)/$(name).build.$(tag))
+	$(eval build_target := build.$(name))
+	$(eval rebuild_target := rebuild.$(name))
+	$(eval internal_target := $(work_dir)/$(name)/.$(name)_build)
 $(patch_target): | $(patch_tag)
 $(repatch_target):
 	@rm -f $(touch_dir)/$(name).patch.*
@@ -106,8 +115,7 @@ $(repatch_target):
 	fi
 	@+$(MAKE) $(patch_tag)
 $(patch_tag):
-	$(eval src := $(shell basename $(src_dir)))
-	$(eval patch_root := $(patch_dir)/$(src))
+	$(eval patch_root := $(patch_dir)/$(if $(src_dir),$(shell basename $(src_dir)),$(name)))
 	$(eval patch_files := $(shell find $(patch_root) -name "*.patch" 2>/dev/null))
 	$(eval apply_patch := git apply --ignore-whitespace --ignore-space-change)
 	$(eval check_patch := $(apply_patch) --check --reverse)
@@ -127,46 +135,26 @@ $(patch_tag):
 		$(check_patch) $(p) --directory $(dir $(subst $(patch_dir)/,,$(p)));\
 	)
 	@touch $$@
-endef
-
-define bsg_tgt_build_tag
-	$(eval name := $(1))
-	$(eval src_dir := $(2))
-	$(eval touch_dir := $(3))
-	$(eval tag := $(5))
-	$(eval build_tag := $(touch_dir)/$(name).build.$(tag))
-	$(eval external_target := build.$(name))
-	$(eval rebuild_target := rebuild.$(name))
-	$(eval internal_target := $(src_dir)/.$(name)_build)
-	$(eval MAKEFLAGS := $(filter-out $(EXTRAMAKEFLAGS),$(MAKEFLAGS)))
-$(external_target): | $(build_tag)
+$(build_target): | $(build_tag)
 $(rebuild_target):
 	@rm -f $(touch_dir)/$(name).build.*
+	@rm -rf $(work_dir)/$(name)
 	@+$(MAKE) $(build_tag)
-$(build_tag):
+$(build_tag): | $(patch_tag)
+	@mkdir -p $(work_dir)/$(name)
 	@+$(MAKE) $(internal_target)
-	@echo "Build of $(name) successful; ignore errors"
 	@touch $$@
+$(internal_target): $(src_dir)
 endef
 
-define bsg_tgt_build_if_new
+define bsg_tgt_build_submodule
 	$(eval name := $(1))
 	$(eval src_dir := $(2))
 	$(eval touch_dir := $(3))
 	$(eval patch_dir := $(4))
-	$(eval tag := $(shell cd $(src_dir); git rev-parse HEAD))
-	$(eval $(call bsg_tgt_patch_tag,$(name),$(src_dir),$(touch_dir),$(patch_dir),$(tag)))
-	$(eval $(call bsg_tgt_build_tag,$(name),$(src_dir),$(touch_dir),$(patch_dir),$(tag)))
-endef
-
-define bsg_tgt_build_if_missing
-	$(eval name := $(1))
-	$(eval src_dir := $(2))
-	$(eval touch_dir := $(3))
-	$(eval patch_dir := $(4))
-	$(eval tag := any)
-	$(eval $(call bsg_tgt_patch_tag,$(name),$(src_dir),$(touch_dir),$(patch_dir),$(tag)))
-	$(eval $(call bsg_tgt_build_tag,$(name),$(src_dir),$(touch_dir),$(patch_dir),$(tag)))
+	$(eval work_dir := $(5))
+	$(eval tag := $(if $(src_dir),$(shell cd $(src_dir); git rev-parse HEAD),any))
+	$(eval $(call bsg_tgt_build_tag,$(name),$(src_dir),$(touch_dir),$(patch_dir),$(work_dir),$(tag)))
 endef
 
 #############################
@@ -236,6 +224,7 @@ endif
 ##########################################################
 ## Other tools
 ##########################################################
+AUTOCONF  ?= autoconf
 CAT       ?= cat
 CMAKE     ?= $(if $(shell which cmake3),cmake3,cmake)
 CD        ?= cd

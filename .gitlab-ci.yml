@@ -14,7 +14,7 @@ include: '.gitlab-ci.common.yml'
 ###################################################
 
 .image_template:
-  extends: [.docker_template]
+  extends: [.docker_template, .bp_tools_mixin]
   script:
     - echo "[CI] Building image ${CONTAINER_IMAGE}" | tee -a ${JOB_LOG}
     - >
@@ -29,7 +29,7 @@ include: '.gitlab-ci.common.yml'
       -t ${CONTAINER_IMAGE} >> ${JOB_LOG} 2>&1
 
 .tool_template:
-  extends: [.install_template]
+  extends: [.install_template, .bp_tools_mixin]
   variables:
     INSTALL_ROOT: "install-${DOCKER_PLATFORM}"
     WORK_ROOT: "work-${DOCKER_PLATFORM}"
@@ -49,7 +49,7 @@ include: '.gitlab-ci.common.yml'
     - make -C ${GIT_SRC_DIR} -j${CORES_PER_JOB} rebuild.${TOOL} >> ${JOB_LOG} 2>&1
 
 .publish_template:
-  extends: [.package_template]
+  extends: [.package_template, .bp_tools_mixin]
   variables:
     # Template variables
     PACKAGE_NAME: "tools-${DOCKER_PLATFORM}"
@@ -93,7 +93,7 @@ stages:
 #      - DOCKER_PLATFORM: $DOCKER_PLATFORM
 
 docker-image:
-  extends: [.image_template, .bp_tools_mixin]
+  extends: [.image_template]
   stage: image
   parallel:
     matrix:
@@ -101,7 +101,7 @@ docker-image:
   rules: !reference [.image_template, rules]
 
 install:
-  extends: [.tool_template, .bp_tools_mixin]
+  extends: [.tool_template]
   stage: build
   parallel:
     matrix:
@@ -113,7 +113,7 @@ install:
         TOOL: ["bsg_sv2v", "bsg_fakeram"]
 
 publish:
-  extends: [.publish_template, .bp_tools_mixin]
+  extends: [.publish_template]
   stage: publish
   parallel:
     matrix:
