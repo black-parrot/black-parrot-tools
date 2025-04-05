@@ -1,16 +1,10 @@
 
-
+# https://docs.gitlab.com/ci/variables/predefined_variables/
 variables:
-  ###################################################
-  ## Variables used in this common script
-  ###################################################
+  #########################################
+  # Required Project Variables
+  #########################################
   REPO_NAME: "setme"
-  DOCKER_PLATFORM: "setme"
-  WORK_DIR: "setme"
-  INSTALL_DIR: "setme"
-  PACKAGE_NAME: "setme"
-  PACKAGE_VER: "setme"
-  PACKAGE_DIR: "setme"
   #########################################
   # Required BSG Variables
   #########################################
@@ -20,9 +14,17 @@ variables:
   GROUP_ID: "${BSG_CI_GROUP_ID}"
   OTHER_GROUPS: "${BSG_CI_OTHER_GROUPS}"
   CORES_PER_JOB: "${BSG_CI_CORES_PER_JOB}"
-  WORKDIR: "${BSG_CI_WORKDIR}"
+  JOB_LOGLEVEL: "${BSG_CI_LOG_LEVEL}"
   #########################################
-  # Optional BSG Variables
+  # Runner mounted locations
+  #########################################
+  WORKDIR: "${BSG_CI_WORKDIR}"
+  CACHEDIR: "${BSG_CI_CACHEDIR}"
+  BUILDDIR: "${BSG_CI_BUILDDIR}"
+  COMMONDIR: "${BSG_CI_COMMONDIR}"
+  CADDIR: "${BSG_CI_CADDIR}"
+  #########################################
+  # BSG Flags
   #########################################
   FORCE_REBUILD: "${BSG_CI_FORCE_REBUILD}"
   #########################################
@@ -36,6 +38,7 @@ variables:
   SHA: "${CI_COMMIT_SHA}"
   JOB_NAME: "${CI_JOB_NAME_SLUG}"
   PIPELINE_ID: "${CI_PIPELINE_ID}"
+  PROJECT_NAME: "${CI_PROJECT_NAME}"
   REGISTRY: "${CI_REGISTRY}"
   REGISTRY_USER: "${CI_REGISTRY_USER}"
   REGISTRY_IMAGE: "${CI_REGISTRY_IMAGE}"
@@ -43,8 +46,11 @@ variables:
   JOB_TOKEN: "${CI_JOB_TOKEN}"
   PROJECT_ID: "${CI_PROJECT_ID}"
   API_URL: "${CI_API_V4_URL}"
+  PROJECT_DIR: "${CI_PROJECT_DIR}"
+  CONCURRENT_ID: "${CI_CONCURRENT_PROJECT_ID}"
   # https://docs.gitlab.com/ci/runners/configure_runners/#ignore-errors-in-after_script
   AFTER_SCRIPT_IGNORE_ERRORS: false
+  FF_ENABLE_BASH_EXIT_CODE_CHECK: true
   # workaround for https://gitlab.com/gitlab-org/gitlab/-/issues/386967
   GIT_CONFIG_COUNT: 1
   GIT_CONFIG_KEY_0: "safe.directory"
@@ -56,12 +62,6 @@ variables:
   # Enable docker caching
   DOCKER_BUILDKIT: "1"
   DOCKER_DRIVER: "overlay2"
-  #########################################
-  # Generated variables
-  #########################################
-  PLATFORM_BRANCH_TAG: "${DOCKER_PLATFORM}-${BRANCH}"
-  REPO_BRANCH_TAG: "${REPO_NAME}-${PLATFORM_BRANCH_TAG}"
-  CONTAINER_IMAGE: "${REGISTRY_IMAGE}:${DOCKER_PLATFORM}"
 
 ###################################################
 ## Anchors
@@ -71,59 +71,22 @@ variables:
   variables: &git_variables
     # builtin
     GET_SOURCES_ATTEMPTS: 3
-    # lockfile variables
-    GIT_LOCKDIR: "ci.${PIPELINE_ID}.lock"
-    GIT_LOCKFILE: "${GIT_LOCKDIR}/${JOB_NAME}"
-    GIT_LOCKDIR_ATTEMPTS: 100
-    GIT_LOCKDIR_TIMEOUT: 10
-    GIT_SRC_DIR: "${GIT_CLONE_PATH}/src"
-    GIT_CLONE_FLAGS: "--single-branch --depth=5 --progress"
-  git_fetch: &git_fetch_script
+    # helper
+    FETCH_BASE_FLAGS: "--jobs=${CORES_PER_JOB} --prune --no-tags"
+    UPDATE_BASE_FLAGS: "--jobs=${CORES_PER_JOB} --recommend-shallow"
+    REFERENCE_REPO: "${COMMONDIR}/${REPO_NAME}"
+    # https://docs.gitlab.com/ci/runners/configure_runners/#handling-concurrency
+    GIT_CLONE_PATH: "${CI_BUILDS_DIR}/${REPO_NAME}/${CI_PIPELINE_ID}/${JOB_NAME}"
+  git_prefetch: &git_prefetch_script
     - |
-      if [ -d ${GIT_SRC_DIR} ]; then
-        echo "[CI] git directory already exists, skipping clone..."
-        git -C ${GIT_SRC_DIR} fetch origin ${COMMIT_REF}
-      else
-        echo "[CI] git directory does not exist, cloning..."
-        git clone -b ${COMMIT_REF} ${GIT_CLONE_FLAGS} ${REPOSITORY_URL} ${GIT_SRC_DIR}
-      fi
-  git_checkout: &git_checkout_script
-    - export CURRENT_SHA=$(git -C ${GIT_SRC_DIR} rev-parse HEAD)
+      echo "[CI] pre-fetching git repo from ${REFERENCE_REPO}"
+      git clone --no-checkout --reference=${REFERENCE_REPO} ${REPOSITORY_URL} ${GIT_CLONE_PATH}
+      echo "[CI] pre-fetching submodules from ${REFERENCE_REPO}"
+      git -C ${GIT_CLONE_PATH} submodule update --init --recursive --reference=${REFERENCE_REPO}
+  git_cleanup: &git_cleanup_script
     - |
-      if [ ${CURRENT_SHA} != ${SHA} ]; then
-        echo "[CI] repo is currently on ${CURRENT_SHA}, checking out ${SHA}"
-        git -C ${GIT_SRC_DIR} checkout ${SHA}
-      fi
-    - git -C ${GIT_SRC_DIR} submodule update --init
-  git_lock: &git_lock_script
-    - |
-      for ((i = 1; i <= $GIT_LOCKDIR_ATTEMPTS; i++)); do
-        if mkdir $GIT_LOCKDIR 2>/dev/null; then
-          echo "[CI] Acquired lock on attempt $i!"
-          touch $GIT_LOCKFILE
-          break
-        else
-          echo "[CI] Lock in use, attempt $i of ${GIT_LOCKDIR_ATTEMPTS}..."
-          sleep ${GIT_LOCKDIR_TIMEOUT}
-        fi
-      done
-  git_unlock: &git_unlock_script
-    - echo "[CI] Attempting to remove lock"
-    - |
-      if [ -f ${GIT_LOCKFILE} ]; then
-        echo "[CI] GIT_LOCKFILE ${GIT_LOCKFILE} exists, removing..."
-        rm ${GIT_LOCKFILE}
-        rmdir ${GIT_LOCKDIR}
-      else
-        echo "[CI] GIT_LOCKFILE ${GIT_LOCKFILE} does not exist, exiting!"
-        exit 1
-      fi
-  git_unlock_fs: &git_unlock_fs_script
-    - |
-      if [ -f ${GIT_LOCKFILE} ]; then
-        echo "[CI] WARNING: ${GIT_LOCKFILE} still exists, Cleaning up..."
-        rm -rf "${GIT_LOCKDIR}"
-      fi
+      echo "[CI] cleaning up the submodules"
+      git submodule deinit --force --all
 
 ###################################################
 ## Mixins
@@ -138,46 +101,77 @@ variables:
   variables:
     # Built-in
     GIT_STRATEGY: "none"
-    GIT_SUBMODULE_STRATEGY: "none"
+    GIT_DEPTH: ""
+    GIT_FETCH_EXTRA_FLAGS: "none"
+    GIT_CHECKOUT: "none"
     GIT_CLEAN_FLAGS: "none"
+    GIT_SUBMODULE_STRATEGY: "none"
+    GIT_SUBMODULE_UPDATE_FLAGS: "none"
+    GIT_SUBMODULE_DEPTH: ""
 
 .clone_mixin:
   extends: [.git_mixin]
   variables:
     # Built-in
     GIT_STRATEGY: "clone"
-    GIT_FETCH_EXTRA_FLAGS: "--jobs=${CORES_PER_JOB} --prune --no-tags"
+    GIT_DEPTH: "5"
+    GIT_FETCH_EXTRA_FLAGS: "${FETCH_BASE_FLAGS}"
+    GIT_CHECKOUT: "true"
+    GIT_CLEAN_FLAGS: "none"
     GIT_SUBMODULE_STRATEGY: "none"
+    GIT_SUBMODULE_UPDATE_FLAGS: "none"
+    GIT_SUBMODULE_DEPTH: ""
 
 .fetch_mixin:
   extends: [.git_mixin]
   variables:
     # Built-in
-    GIT_STRATEGY: "none"
-    GIT_SUBMODULE_STRATEGY: "none"
-    # Confusing: actually working directory
-    GIT_CLONE_PATH: "${BUILDS}/${REPO_BRANCH_TAG}"
+    GIT_STRATEGY: "fetch"
+    GIT_DEPTH: "5"
+    GIT_FETCH_EXTRA_FLAGS: "${FETCH_BASE_FLAGS}"
+    GIT_CHECKOUT: "true"
+    GIT_CLEAN_FLAGS: "none"
+    GIT_SUBMODULE_STRATEGY: "recursive"
+    GIT_SUBMODULE_UPDATE_FLAGS: "${UPDATE_BASE_FLAGS}"
+    GIT_SUBMODULE_DEPTH: "3"
+
+.api_mixin:
+  variables:
+    # template variables
+    PACKAGE_NAME: "setme"
+    PUBLISH_NAME: "setme"
+    PUBLISH_VER: "${BRANCH}"
+    # generated variables
+    PACKAGE_DIR: "${PROJECT_DIR}/${PACKAGE_NAME}"
+    PACKAGE_TGZ: "${PACKAGE_DIR}.tar.gz"
+    PUBLISH_TGZ: "${PACKAGE_NAME}.tar.gz"
+    # builtin variables
+    PROJECT_URL: "${API_URL}/projects/${PROJECT_ID}"
+    PACKAGE_URL: "${PROJECT_URL}/packages/generic/${PACKAGE_NAME}"
+    PUBLISH_URL: "${PACKAGE_URL}/${PUBLISH_VER}/${PUBLISH_TGZ}"
 
 ###################################################
 ## Job Templates
 ###################################################
 .job_template:
   variables:
-    # Generated variables
-    LOG_DIR: "./logs"
-    JOB_LOG: "${LOG_DIR}/${JOB_NAME}.log"
-    RPT_DIR: "./reports"
-    JOB_RPT: "${RPT_DIR}/${JOB_NAME}.rpt"
-    DOTENV: "build.env"
-  hooks:
-    pre_get_sources_script:
-      - !reference [.git_anchors, git_lock]
+    # default variables
+    JOB_LOG: "${PROJECT_DIR}/logs/${JOB_NAME}.log"
+    JOB_RPT: "${PROJECT_DIR}/reports/${JOB_NAME}.rpt"
+    DOTENV: "${PROJECT_DIR}/build.env"
+    # used in all jobs
+    DOCKER_PLATFORM: "setme"
+    CONTAINER_IMAGE: "setme"
+  tags: [bsg] # use bsg machines by default
   before_script:
-    - echo "[CI] Refreshing log directory"
-    - mkdir -p ${LOG_DIR} ${RPT_DIR} && rm -f ${JOB_LOG} ${JOB_RPT}
-    - echo "[CI] Update DOTENV"
-    - echo "DOTENV_TESTVAR=dotenv_testvar" | tee -a ${GITLAB_ENV} >> ${DOTENV}
-    - echo "[CI] Starting job ${JOB_GROUP_NAME}" | tee -a ${JOB_LOG}
+    - |
+      echo "[CI] job running from ${CI_PROJECT_DIR}"
+      echo "[CI] repo cloning to ${GIT_CLONE_PATH}"
+      echo "[CI] Creating log directory"
+      mkdir -p $(dirname ${JOB_LOG}) $(dirname ${JOB_RPT})
+      echo "[CI] Update DOTENV"
+      echo "DOTENV_TESTVAR=dotenv_testvar" | tee -a ${GITLAB_ENV} >> ${DOTENV}
+      echo "[CI] Starting job ${JOB_GROUP_NAME}" | tee -a ${JOB_LOG}
   after_script:
     - |
       if [ $CI_JOB_STATUS == 'success' ]; then
@@ -185,8 +179,9 @@ variables:
       else
         echo "[CI] job failed with status $CI_JOB_STATUS" | tee -a ${JOB_RPT}
       fi
-    - echo "[CI] Finishing job ${JOB_GROUP_NAME}"
-    - !reference [.git_anchors, git_unlock_fs]
+      echo "Unset variables:" >> ${JOB_RPT}
+      export | grep -s "setme" || true >> ${JOB_RPT}
+      echo "[CI] Finishing job ${JOB_GROUP_NAME}" | tee -a ${JOB_LOG}
   artifacts:
     when: always
     paths:
@@ -194,19 +189,23 @@ variables:
       - ${JOB_RPT}
     reports:
       dotenv: ${DOTENV}
+  # Default rules
+  rules: [when: on_success]
+  # Default dependencies
+  dependencies: []
 
 ## https://docs.gitlab.com/ee/user/packages/container_registry/build_and_push_images.html
 .docker_template:
   extends: [.job_template, .clone_mixin]
-  tags: [saas-linux-small-amd64] # Use shared gitlab runner
+  tags: [saas-linux-small-amd64] # use shared gitlab runner for dind
   image: {name: docker:24.0.5}
   services: [docker:24.0.5-dind]
   before_script:
     - !reference [.job_template, before_script]
-    - echo "[CI] Logging into docker registry" | tee -a ${JOB_LOG}
-    - echo "${REGISTRY_PASSWORD}" | docker login ${REGISTRY} -u ${REGISTRY_USER} --password-stdin
-    - echo "[CI] Checking for previous docker image ${CONTAINER_IMAGE}" | tee -a ${JOB_LOG}
     - |
+      echo "[CI] Logging into docker registry" | tee -a ${JOB_LOG}
+      echo "${REGISTRY_PASSWORD}" | docker login ${REGISTRY} -u ${REGISTRY_USER} --password-stdin
+      echo "[CI] Checking for previous docker image ${CONTAINER_IMAGE}" | tee -a ${JOB_LOG}
       if docker manifest inspect ${CONTAINER_IMAGE} > /dev/null 2>&1; then
         echo "[CI] ${CONTAINER_IMAGE} exists, pulling..." | tee -a ${JOB_LOG}
         docker pull ${CONTAINER_IMAGE}
@@ -214,71 +213,55 @@ variables:
         echo "[CI] ${CONTAINER_IMAGE} does not exist, starting from scratch"  | tee -a ${JOB_LOG}
       fi
   after_script:
-    - echo "[CI] Logging into docker registry"  | tee -a ${JOB_LOG}
-    - echo "${REGISTRY_PASSWORD}" | docker login ${REGISTRY} -u ${REGISTRY_USER} --password-stdin
-    - echo "[CI] Publishing docker images"  | tee -a ${JOB_LOG}
-    - docker push ${CONTAINER_IMAGE}
+    - |
+      echo "[CI] Logging into docker registry"  | tee -a ${JOB_LOG}
+      echo "${REGISTRY_PASSWORD}" | docker login ${REGISTRY} -u ${REGISTRY_USER} --password-stdin
+      echo "[CI] Publishing docker images"  | tee -a ${JOB_LOG}
+      docker push ${CONTAINER_IMAGE}
     - !reference [.job_template, after_script]
   rules:
-    - if: $FORCE_REBUILD
+    - if: $BSG_CI_FORCE_REBUILD == "1"
       when: always
     - changes:
         paths:
-          - "docker/*"
+          - docker/*
 
-.install_template:
+# https://gitlab.com/gitlab-org/gitlab-runner/-/issues/1736#note_107983504
+.repo_template:
   extends: [.job_template, .fetch_mixin]
-  tags: [bsg]
   image: {name: "${CONTAINER_IMAGE}"}
-  variables:
-    # builtins
-    # https://gitlab.com/gitlab-org/gitlab-runner/-/issues/1736#note_107983504
-    FF_DISABLE_UMASK_FOR_DOCKER_EXECUTOR: "true"
-    # generated variables
-    INSTALL_TGZ: "${INSTALL_DIR}.tar.gz"
-  before_script:
-    - !reference [.job_template, before_script]
-    - echo "[CI] Locking for git operation" | tee -a ${JOB_LOG}
-    - *git_lock_script
-    - echo "[CI] Fetching repository" | tee -a ${JOB_LOG}
-    - *git_fetch_script
-    - echo "[CI] Doing basic checkout" | tee -a ${JOB_LOG}
-    - *git_checkout_script
-    - echo "[CI] Remember to unlock with git_unlock_script" | tee -a ${JOB_LOG}
-  after_script:
-    - echo "[CI] Zipping up ${INSTALL_DIR}" | tee -a ${JOB_LOG}
-    - tar -czvf ${INSTALL_TGZ} ${INSTALL_DIR}/ >> ${JOB_LOG} 2>&1
-    - !reference [.job_template, after_script]
-  artifacts:
-    when: always
-    paths:
-      - "${JOB_LOG}"
-      - "${JOB_RPT}"
-      - "${INSTALL_TGZ}"
+  variables: {FF_DISABLE_UMASK_FOR_DOCKER_EXECUTOR: "true"}
+  hooks: {pre_get_sources_script: !reference [.git_anchors, git_prefetch]}
+  rules: !reference [.job_template, rules]
 
-.package_template:
-  extends: [.job_template, .bare_mixin]
-  tags: [saas-linux-small-amd64] # Use shared gitlab runner
-  variables:
-    # generated
-    PACKAGE_TGZ: "${PACKAGE_DIR}.tar.gz"
-    # builtin
-    PROJECT_URL: "${API_URL}/projects/${PROJECT_ID}"
-    PACKAGE_URL: "${PROJECT_URL}/packages/generic/${PACKAGE_NAME}"
-    PUBLISH_URL: "${PACKAGE_URL}/${PACKAGE_VER}/${PACKAGE_TGZ}"
-  before_script:
-    - !reference [.job_template, before_script]
-    - echo "[CI] Creating PACKAGE_DIR=${PACKAGE_DIR}" | tee -a ${JOB_LOG}
-    - mkdir -p ${PACKAGE_DIR}
+# https://docs.gitlab.com/user/packages/package_registry/
+.upload_template:
+  extends: [.repo_template, .api_mixin]
   after_script:
-    - echo "[CI] Zipping installation ${PACKAGE_TGZ}"
-    - tar -czvf ${PACKAGE_TGZ} ${PACKAGE_DIR}  >> ${JOB_LOG} 2>&1
     - |
       if [ $CI_JOB_STATUS == 'success' ]; then
+        echo "[CI] Zipping installation ${PACKAGE_TGZ}" | tee -a ${JOB_LOG}
+        tar --warning=no-file-changed -czvf ${PACKAGE_TGZ} -C $(dirname ${PACKAGE_DIR}) $(basename ${PACKAGE_DIR}) >> ${JOB_LOG} 2>&1
         echo "[CI] Publishing to ${PACKAGE_URL} with curl API"
         curl --location --header "JOB-TOKEN: ${JOB_TOKEN}" \
              --upload-file ${PACKAGE_TGZ} \
-             "${PUBLISH_URL}"
+             ${PUBLISH_URL}
       fi
-    - !reference [.job_template, after_script]
+    - !reference [.repo_template, after_script]
+  rules: !reference [.repo_template, rules]
+
+# https://docs.gitlab.com/user/packages/package_registry/
+.download_template:
+  extends: [.repo_template, .api_mixin]
+  before_script:
+    - !reference [.repo_template, before_script]
+    - |
+      echo "[CI] Creating PACKAGE_DIR=${PACKAGE_DIR}" | tee -a ${JOB_LOG}
+      mkdir -p ${PACKAGE_DIR}
+      curl --location --header "JOB-TOKEN: ${JOB_TOKEN}" \
+           --output ${PACKAGE_TGZ} \
+           ${PUBLISH_URL}
+      echo "[CI] Unzipping installation ${PACKAGE_TGZ}" | tee -a ${JOB_LOG}
+      tar -xzvf ${PACKAGE_TGZ} -C ${PACKAGE_DIR} --strip-components=1 >> ${JOB_LOG} 2>&1
+  rules: !reference [.repo_template, rules]
 

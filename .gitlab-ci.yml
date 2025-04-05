@@ -8,6 +8,10 @@ include: '.gitlab-ci.common.yml'
 .bp_tools_mixin:
   variables:
     REPO_NAME: "black-parrot-tools"
+    CONTAINER_IMAGE: "${REGISTRY_IMAGE}:${DOCKER_PLATFORM}"
+    TOOLS_PACKAGE: "tools-${DOCKER_PLATFORM}"
+    INSTALL_ROOT: "${PROJECT_DIR}/install-${DOCKER_PLATFORM}"
+    WORK_ROOT: "${PROJECT_DIR}/work-${DOCKER_PLATFORM}"
 
 ###################################################
 ## Templates
@@ -15,57 +19,85 @@ include: '.gitlab-ci.common.yml'
 
 .image_template:
   extends: [.docker_template, .bp_tools_mixin]
+  stage: image
   script:
-    - echo "[CI] Building image ${CONTAINER_IMAGE}" | tee -a ${JOB_LOG}
-    - >
-      docker build docker -f docker/Dockerfile.${DOCKER_PLATFORM}
-      --build-arg BUILDKIT_INLINE_CACHE=1 --cache-from ${CONTAINER_IMAGE}
-      --build-arg USER_NAME="${USER_NAME}"
-      --build-arg USER_ID="${USER_ID}"
-      --build-arg GROUP_NAME="${GROUP_NAME}"
-      --build-arg GROUP_ID="${GROUP_ID}"
-      --build-arg OTHER_GROUPS="${OTHER_GROUPS}"
-      --build-arg WORKDIR="${WORKDIR}"
+    - |
+      echo "[CI] Building image ${CONTAINER_IMAGE}" | tee -a ${JOB_LOG}
+      docker build docker -f docker/Dockerfile.${DOCKER_PLATFORM} \
+      --build-arg BUILDKIT_INLINE_CACHE=1 --cache-from ${CONTAINER_IMAGE} \
+      --build-arg USER_NAME="${USER_NAME}" \
+      --build-arg USER_ID="${USER_ID}" \
+      --build-arg GROUP_NAME="${GROUP_NAME}" \
+      --build-arg GROUP_ID="${GROUP_ID}" \
+      --build-arg OTHER_GROUPS="${OTHER_GROUPS}" \
+      --build-arg WORKDIR="${WORKDIR}" \
       -t ${CONTAINER_IMAGE} >> ${JOB_LOG} 2>&1
+  rules: !reference [.docker_template, rules]
 
 .tool_template:
-  extends: [.install_template, .bp_tools_mixin]
+  extends: [.repo_template, .bp_tools_mixin]
+  stage: build
   variables:
-    INSTALL_ROOT: "install-${DOCKER_PLATFORM}"
-    WORK_ROOT: "work-${DOCKER_PLATFORM}"
-    # Template variables
-    WORK_DIR: "${WORK_ROOT}-${TOOL}"
-    INSTALL_DIR: "${INSTALL_ROOT}-${TOOL}"
-    # Exported to make sure things go in the right place
-    BP_WORK_DIR: "${CI_PROJECT_DIR}/${WORK_DIR}"
-    BP_INSTALL_DIR: "${CI_PROJECT_DIR}/${INSTALL_DIR}"
+    # exported to make sure things go in the right place
+    BP_WORK_DIR: "${WORK_ROOT}-${TOOL}"
+    BP_INSTALL_DIR: "${INSTALL_ROOT}-${TOOL}"
+    BP_INSTALL_TGZ: "${BP_INSTALL_DIR}.tar.gz"
   script:
-    - echo "[CI] Doing makefile checkout" | tee -a ${JOB_LOG}
-    - make -C ${GIT_SRC_DIR} -j${CORES_PER_JOB} checkout >> ${JOB_LOG} 2>&1
-    - echo "[CI] Repatching ${TOOL}" | tee -a ${JOB_LOG}
-    - make -C ${GIT_SRC_DIR} -j${CORES_PER_JOB} repatch.${TOOL} >> ${JOB_LOG} 2>&1
-    - !reference [.git_anchors, git_unlock]
-    - echo "[CI] Rebuilding ${TOOL}" | tee -a ${JOB_LOG}
-    - make -C ${GIT_SRC_DIR} -j${CORES_PER_JOB} rebuild.${TOOL} >> ${JOB_LOG} 2>&1
+    - |
+      echo "[CI] Doing makefile checkout" | tee -a ${JOB_LOG}
+      make -j${CORES_PER_JOB} checkout >> ${JOB_LOG} 2>&1
+      echo "[CI] Repatching ${TOOL}" | tee -a ${JOB_LOG}
+      make -j${CORES_PER_JOB} repatch.${TOOL} >> ${JOB_LOG} 2>&1
+      echo "[CI] Rebuilding ${TOOL}" | tee -a ${JOB_LOG}
+      make -j${CORES_PER_JOB} rebuild.${TOOL} >> ${JOB_LOG} 2>&1
+      echo "[CI] Zipping up ${BP_INSTALL_DIR}" | tee -a ${JOB_LOG}
+      tar --warning=no-file-changed -czvf ${BP_INSTALL_TGZ} -C $(dirname ${BP_INSTALL_DIR}) $(basename ${BP_INSTALL_DIR}) >> ${JOB_LOG} 2>&1
+  artifacts:
+    when: always
+    paths:
+      - "${JOB_LOG}"
+      - "${JOB_RPT}"
+      - "${BP_INSTALL_TGZ}"
+  rules: !reference [.repo_template, rules]
 
 .publish_template:
-  extends: [.package_template, .bp_tools_mixin]
+  extends: [.upload_template, .bp_tools_mixin]
+  stage: publish
   variables:
     # Template variables
-    PACKAGE_NAME: "tools-${DOCKER_PLATFORM}"
-    PACKAGE_DIR: "install-${DOCKER_PLATFORM}"
-    PACKAGE_VER: "${SHA}"
-  stage: publish
+    PACKAGE_NAME: "${TOOLS_PACKAGE}"
+    PACKAGE_DIR: "${PROJECT_DIR}/${PACKAGE_NAME}"
   script:
     # This is only necessary because we're downloading all artifacts
     #   and need to separate out the correct platform artifacts
-    - WILDCARD=*-${DOCKER_PLATFORM}-*.tar.gz
-    - FILTERED_TGZ=$(ls ${WILDCARD})
-    - echo "[CI] archives found for platform ${DOCKER_PLATFORM} ${FILTERED_TGZ}"
     - |
+      WILDCARD=${INSTALL_ROOT}-*.tar.gz
+      FILTERED_TGZ=$(ls ${WILDCARD})
+      echo "[CI] archives found for platform '${WILDCARD}'" | tee -a ${JOB_LOG}
+      echo "${FILTERED_TGZ}" | tee -a ${JOB_LOG}
+      mkdir -p ${PACKAGE_DIR}
       for f in ${FILTERED_TGZ}; do
         tar -xzvf $f -C ${PACKAGE_DIR} --strip-components=1 >> ${JOB_LOG} 2>&1
       done
+      echo "[CI] artifacts extracted to ${PACKAGE_DIR}" | tee -a ${JOB_LOG}
+      ls ${PACKAGE_DIR}
+  rules: !reference [.upload_template, rules]
+
+.smoke_template:
+  extends: [.download_template, .bp_tools_mixin]
+  stage: run
+  variables:
+    SMOKE_SCRIPT: "./ci/smoke-${TOOL}.sh"
+    # Template variables
+    PACKAGE_NAME: "${TOOLS_PACKAGE}"
+    PACKAGE_DIR: "${PROJECT_DIR}/${JOB_NAME}"
+    # exported to make sure things go in the right place
+    BP_INSTALL_DIR: "${PACKAGE_DIR}"
+  script:
+    - |
+      echo "[CI] running script " | tee -a ${JOB_LOG}
+      ./ci/common/run-ci.sh ${SMOKE_SCRIPT}
+  rules: !reference [.download_template, rules]
 
 ###################################################
 ## Workflow
@@ -80,6 +112,7 @@ stages:
   - image
   - build
   - publish
+  - run
 
 ###################################################
 ## Actual Jobs
@@ -92,17 +125,15 @@ stages:
 #    matrix:
 #      - DOCKER_PLATFORM: $DOCKER_PLATFORM
 
-docker-image:
+build-image:
   extends: [.image_template]
-  stage: image
   parallel:
     matrix:
-      - DOCKER_PLATFORM: ["ubuntu24.04", "centos7"]
+      - DOCKER_PLATFORM: ["centos7", "ubuntu24.04"]
   rules: !reference [.image_template, rules]
 
-install:
+build-tools:
   extends: [.tool_template]
-  stage: build
   parallel:
     matrix:
       - DOCKER_PLATFORM: ["ubuntu24.04", "centos7"]
@@ -111,12 +142,23 @@ install:
         TOOL: ["spike", "surelog", "yslang", "axe"]
       - DOCKER_PLATFORM: ["ubuntu24.04", "centos7"]
         TOOL: ["bsg_sv2v", "bsg_fakeram"]
+  rules: !reference [.tool_template, rules]
+  dependencies: [build-image]
 
-publish:
+publish-tools:
   extends: [.publish_template]
-  stage: publish
   parallel:
     matrix:
-      - DOCKER_PLATFORM: ["ubuntu24.04", "centos7"]
+      - DOCKER_PLATFORM: ["centos7", "ubuntu24.04"]
+  rules: !reference [.publish_template, rules]
+  dependencies: [build-tools]
 
+run-smoke:
+  extends: [.smoke_template]
+  parallel:
+    matrix:
+      - DOCKER_PLATFORM: ["centos7", "ubuntu24.04"]
+        TOOL: ["verilator", "yosys"]
+  rules: !reference [.smoke_template, rules]
+  dependencies: [publish-tools]
 
