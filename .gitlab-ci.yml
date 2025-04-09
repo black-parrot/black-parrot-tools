@@ -8,10 +8,8 @@ include: '.gitlab-ci.common.yml'
 .bp_tools_mixin:
   variables:
     REPO_NAME: "black-parrot-tools"
-    CONTAINER_IMAGE: "${REGISTRY_IMAGE}:${DOCKER_PLATFORM}"
     TOOLS_PACKAGE: "tools-${DOCKER_PLATFORM}"
-    INSTALL_ROOT: "${PROJECT_DIR}/install-${DOCKER_PLATFORM}"
-    WORK_ROOT: "${PROJECT_DIR}/work-${DOCKER_PLATFORM}"
+    DOCKER_PLATFORM: "setme" # set by parallel matrix
 
 ###################################################
 ## Templates
@@ -106,7 +104,7 @@ include: '.gitlab-ci.common.yml'
 # Currently only run on pushes, merge requests do not run separately
 workflow:
   rules:
-    - if: $CI_PIPELINE_SOURCE == "push"
+    - if: $CI_PIPELINE_SOURCE == "push" && $CI_COMMIT_BRANCH =~ "/^ci_.*$|master/"
 
 stages:
   - image

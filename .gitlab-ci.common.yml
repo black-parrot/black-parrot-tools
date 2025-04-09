@@ -5,6 +5,7 @@ variables:
   # Required Project Variables
   #########################################
   REPO_NAME: "setme"
+  DOCKER_PLATFORM: "setme"
   #########################################
   # Required BSG Variables
   #########################################
@@ -79,6 +80,9 @@ variables:
     GIT_CLONE_PATH: "${CI_BUILDS_DIR}/${REPO_NAME}/${CI_PIPELINE_ID}/${JOB_NAME}"
   git_prefetch: &git_prefetch_script
     - |
+      echo "[CI] configuring git to fetch with HTTP 1.1"
+      git config --global http.version HTTP/1.1
+      git config --global http.postBuffer 157286400
       echo "[CI] pre-fetching git repo from ${REFERENCE_REPO}"
       if [ -d ${GIT_CLONE_PATH} ]; then
         echo "[CI] git repo found at ${GIT_CLONE_PATH}"
@@ -86,7 +90,7 @@ variables:
         git clone --no-checkout --reference=${REFERENCE_REPO} ${REPOSITORY_URL} ${GIT_CLONE_PATH}
       fi
       echo "[CI] pre-fetching submodules from ${REFERENCE_REPO}"
-      git -C ${GIT_CLONE_PATH} submodule update --init --recursive --reference=${REFERENCE_REPO}
+      git -C ${GIT_CLONE_PATH} submodule update --init --reference=${REFERENCE_REPO}
   git_cleanup: &git_cleanup_script
     - |
       echo "[CI] cleaning up the submodules"
@@ -163,9 +167,9 @@ variables:
     JOB_LOG: "${PROJECT_DIR}/logs/${JOB_NAME}.log"
     JOB_RPT: "${PROJECT_DIR}/reports/${JOB_NAME}.rpt"
     DOTENV: "${PROJECT_DIR}/build.env"
-    # used in all jobs
-    DOCKER_PLATFORM: "setme"
-    CONTAINER_IMAGE: "setme"
+    CONTAINER_IMAGE: "${REGISTRY_IMAGE}:${DOCKER_PLATFORM}"
+    INSTALL_ROOT: "${PROJECT_DIR}/install-${DOCKER_PLATFORM}"
+    WORK_ROOT: "${PROJECT_DIR}/work-${DOCKER_PLATFORM}"
   tags: [bsg] # use bsg machines by default
   before_script:
     - |
