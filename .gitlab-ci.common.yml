@@ -80,7 +80,11 @@ variables:
   git_prefetch: &git_prefetch_script
     - |
       echo "[CI] pre-fetching git repo from ${REFERENCE_REPO}"
-      git clone --no-checkout --reference=${REFERENCE_REPO} ${REPOSITORY_URL} ${GIT_CLONE_PATH}
+      if [ -d ${GIT_CLONE_PATH} ]; then
+        echo "[CI] git repo found at ${GIT_CLONE_PATH}"
+      else
+        git clone --no-checkout --reference=${REFERENCE_REPO} ${REPOSITORY_URL} ${GIT_CLONE_PATH}
+      fi
       echo "[CI] pre-fetching submodules from ${REFERENCE_REPO}"
       git -C ${GIT_CLONE_PATH} submodule update --init --recursive --reference=${REFERENCE_REPO}
   git_cleanup: &git_cleanup_script
@@ -139,7 +143,7 @@ variables:
   variables:
     # template variables
     PACKAGE_NAME: "setme"
-    PUBLISH_NAME: "setme"
+    PUBLISH_NAME: "${PACKAGE_NAME}"
     PUBLISH_VER: "${BRANCH}"
     # generated variables
     PACKAGE_DIR: "${PROJECT_DIR}/${PACKAGE_NAME}"
