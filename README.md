@@ -55,6 +55,13 @@ Files marked with [x] are not often interesting to users while files marked with
             |---entrypoint.ubuntu24.04.sh   # [x] entrypoint wrapper for ubuntu24.04
             |---Makefile                    # [r] targets to create and run docker containers
             |---requirements.txt            # [r] python requirements for docker image
+        |---ci
+           |---common
+              |---run-ci.sh                 # [r] wrapper script to run ci script on GitLab
+              |---run-local.sh              # [w] wrapper script to run ci script locally
+              |---functions.sh              # [x] helper functions for bash scripts
+           |---smoke-verilator.sh      # [r] test that verilator is installed correctly
+           |---smoke-yosys.sh          # [r] test that yosys is installed correctly
 
 
 ## Important Flags
@@ -80,7 +87,7 @@ We also play clever tricks to allow users to mount the current repo in the image
     #   DOCKER_PLATFORM: OS for the base image (e.g. ubuntu24.04, ...)
     #   USE_LOCAL_CREDENTIALS: whether to create the docker volume with your local uid/gid
     make -C docker docker-image; # creates a black-parrot-tools docker image
-    make -C docker docker-run; # mounts black-parrot-tools as a docker container
+    make -C docker docker-run;   # mounts black-parrot-tools as a docker container
 
 
 ## Issues
