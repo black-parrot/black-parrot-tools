@@ -28,6 +28,7 @@ docker-run: ## mounts as a docker container
 	@$(eval CONTAINER_NAME := $(notdir $(TOP)))
 	@$(eval DOCKER         := docker)
 	@$(DOCKER) run \
+		--network=host \
 		--volume=$(TOP):$(DOCKER_WORKDIR)/$(CONTAINER_NAME) \
 		-it $(CONTAINER_NAME)
 

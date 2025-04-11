@@ -24,6 +24,9 @@ readonly _BSG_HDR_WRN="[BSG-WRN]"
 readonly _BSG_HDR_INF="[BSG]"
 readonly _BSG_HDR_DBG="[BSG-DBG]"
 
+readonly _BSG_HDR_PASS="[BSG-PASS]"
+readonly _BSG_HDR_FAIL="[BSG-FAIL]"
+
 readonly _BSG_E_LOG_LEVEL_MIN=-99
 readonly _BSG_E_LOG_LEVEL_RAW=-1
 readonly _BSG_E_LOG_LEVEL_ERR=0
@@ -161,8 +164,33 @@ bsg_run_task() {
     bsg_log_raw "description: ${_desc}"
     bsg_log_raw "command: ${_cmd}"
     bsg_log_raw "output:"
-    exec $@ 2>&1 | sed 's/^/\t\t/g' | tee -a ${_BSG_LOG_FILE} | head -n${_BSG_TRIM_LINES}
+
+    set -o pipefail
+    {
+        # Run the command and format output
+        eval "$_cmd" 2>&1 | sed 's/^/\t\t/g' | tee -a "${_BSG_LOG_FILE}" | head -n"${_BSG_TRIM_LINES}"
+        _exit_code=$?
+    }
+    set +o pipefail
     bsg_log_raw "...truncated after ${_BSG_TRIM_LINES} lines"
+
+    if [ $_exit_code -ne 0 ]; then
+        bsg_log_error "task returned non-zero: $_exit_code"
+    fi
+
+    return $_exit_code
+}
+
+bsg_pass() {
+    _bsg_parse_args 1 str "$@" || return 1
+
+    printf "${_BSG_HDR_PASS} ${_str}\n"
+}
+
+bsg_fail() {
+    _bsg_parse_args 1 str "$@" || return 1
+
+    printf "${_BSG_HDR_FAIL} ${_str}\n"
 }
 
 ######################

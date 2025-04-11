@@ -8,11 +8,20 @@ include: '.gitlab-ci.common.yml'
 .bp_tools_mixin:
   variables:
     REPO_NAME: "black-parrot-tools"
+    DOCKER_PLATFORM: "setme"
+    DOCKERFILE_DIR: "docker"
+    # used internally
     TOOLS_PACKAGE: "tools-${DOCKER_PLATFORM}"
-    DOCKER_PLATFORM: "setme" # set by parallel matrix
+    TOOLS_INSTALL_TAG: "${TOOLS_PACKAGE}-install"
+    TOOLS_WILDCARD: "${JOB_DEPS_ROOT}/${TOOLS_INSTALL_TAG}-*"
+    TOOLS_UPLOAD_PACKAGE: "${JOB_UPLOAD_ROOT}/${TOOLS_INSTALL_TAG}"
+    TOOLS_DOWNLOAD_PACKAGE: "${JOB_DOWNLOAD_ROOT}/${TOOLS_INSTALL_TAG}"
+    # exported to make sure things go in the right place
+    BP_WORK_DIR: "${JOB_WORK_ROOT}/bp-tools-work"
+    BP_INSTALL_DIR: "${JOB_WORK_ROOT}/bp-tools-install"
 
 ###################################################
-## Templates
+## templates
 ###################################################
 
 .image_template:
@@ -20,8 +29,8 @@ include: '.gitlab-ci.common.yml'
   stage: image
   script:
     - |
-      echo "[CI] Building image ${CONTAINER_IMAGE}" | tee -a ${JOB_LOG}
-      docker build docker -f docker/Dockerfile.${DOCKER_PLATFORM} \
+      echo "[CI] building image ${CONTAINER_IMAGE}" | tee -a ${JOB_LOG}
+      docker build docker -f ${DOCKERFILE_DIR}/Dockerfile.${DOCKER_PLATFORM} \
       --build-arg BUILDKIT_INLINE_CACHE=1 --cache-from ${CONTAINER_IMAGE} \
       --build-arg USER_NAME="${USER_NAME}" \
       --build-arg USER_ID="${USER_ID}" \
@@ -33,67 +42,59 @@ include: '.gitlab-ci.common.yml'
   rules: !reference [.docker_template, rules]
 
 .tool_template:
-  extends: [.repo_template, .bp_tools_mixin]
+  extends: [.build_template, .bp_tools_mixin]
   stage: build
   variables:
-    # exported to make sure things go in the right place
-    BP_WORK_DIR: "${WORK_ROOT}-${TOOL}"
-    BP_INSTALL_DIR: "${INSTALL_ROOT}-${TOOL}"
-    BP_INSTALL_TGZ: "${BP_INSTALL_DIR}.tar.gz"
+    TOOL: "setme"
+    # template variables
+    ARTIFACT_NAME: "${TOOLS_INSTALL_TAG}-${TOOL}"
+    BUILD_OUTPUT_ROOT: "${BP_INSTALL_DIR}-${TOOL}"
   script:
     - |
-      echo "[CI] Doing makefile checkout" | tee -a ${JOB_LOG}
+      echo "[CI] doing makefile checkout" | tee -a ${JOB_LOG}
       make -j${CORES_PER_JOB} checkout >> ${JOB_LOG} 2>&1
-      echo "[CI] Repatching ${TOOL}" | tee -a ${JOB_LOG}
+      echo "[CI] repatching ${TOOL}" | tee -a ${JOB_LOG}
       make -j${CORES_PER_JOB} repatch.${TOOL} >> ${JOB_LOG} 2>&1
-      echo "[CI] Rebuilding ${TOOL}" | tee -a ${JOB_LOG}
+      echo "[CI] rebuilding ${TOOL}" | tee -a ${JOB_LOG}
       make -j${CORES_PER_JOB} rebuild.${TOOL} >> ${JOB_LOG} 2>&1
-      echo "[CI] Zipping up ${BP_INSTALL_DIR}" | tee -a ${JOB_LOG}
-      tar --warning=no-file-changed -czvf ${BP_INSTALL_TGZ} -C $(dirname ${BP_INSTALL_DIR}) $(basename ${BP_INSTALL_DIR}) >> ${JOB_LOG} 2>&1
-  artifacts:
-    when: always
-    paths:
-      - "${JOB_LOG}"
-      - "${JOB_RPT}"
-      - "${BP_INSTALL_TGZ}"
-  rules: !reference [.repo_template, rules]
+      echo "[CI] moving output to build output" | tee -a ${JOB_LOG}
+      mv ${BP_INSTALL_DIR} ${BUILD_OUTPUT_ROOT} >> ${JOB_LOG} 2>&1
+  rules: !reference [.build_template, rules]
 
 .publish_template:
   extends: [.upload_template, .bp_tools_mixin]
   stage: publish
   variables:
-    # Template variables
-    PACKAGE_NAME: "${TOOLS_PACKAGE}"
-    PACKAGE_DIR: "${PROJECT_DIR}/${PACKAGE_NAME}"
+    # template variables
+    LOCAL_PACKAGE_ROOT: "${TOOLS_UPLOAD_PACKAGE}"
+    API_PACKAGE_NAME: "${TOOLS_PACKAGE}"
+    API_PACKAGE_VER: "${COMMIT_REF_SLUG}"
   script:
-    # This is only necessary because we're downloading all artifacts
+    # this is only necessary because we're downloading all artifacts
     #   and need to separate out the correct platform artifacts
     - |
-      WILDCARD=${INSTALL_ROOT}-*.tar.gz
-      FILTERED_TGZ=$(ls ${WILDCARD})
-      echo "[CI] archives found for platform '${WILDCARD}'" | tee -a ${JOB_LOG}
-      echo "${FILTERED_TGZ}" | tee -a ${JOB_LOG}
-      mkdir -p ${PACKAGE_DIR}
+      FILTERED_TGZ=$(ls ${TOOLS_WILDCARD}) >> ${JOB_LOG} 2>&1
+      echo "[CI] archives found for platform '${TOOLS_WILDCARD}': ${FILTERED_TGZ}" | tee -a ${JOB_LOG}
       for f in ${FILTERED_TGZ}; do
-        tar -xzvf $f -C ${PACKAGE_DIR} --strip-components=1 >> ${JOB_LOG} 2>&1
+        tar --totals -xzf $f -C ${LOCAL_PACKAGE_ROOT} --strip-components=1 >> ${JOB_LOG} 2>&1
       done
-      echo "[CI] artifacts extracted to ${PACKAGE_DIR}" | tee -a ${JOB_LOG}
-      ls ${PACKAGE_DIR}
   rules: !reference [.upload_template, rules]
 
 .smoke_template:
   extends: [.download_template, .bp_tools_mixin]
   stage: run
   variables:
-    SMOKE_SCRIPT: "./ci/smoke-${TOOL}.sh"
-    # Template variables
-    PACKAGE_NAME: "${TOOLS_PACKAGE}"
-    PACKAGE_DIR: "${PROJECT_DIR}/${JOB_NAME}"
-    # exported to make sure things go in the right place
-    BP_INSTALL_DIR: "${PACKAGE_DIR}"
+    TOOL: "setme"
+    # template variables
+    LOCAL_PACKAGE_ROOT: "${TOOLS_DOWNLOAD_PACKAGE}"
+    API_PACKAGE_NAME: "${TOOLS_PACKAGE}"
+    API_PACKAGE_VER: "${COMMIT_REF_SLUG}"
   script:
     - |
-      echo "[CI] running script " | tee -a ${JOB_LOG}
+      echo "[CI] moving download to installation directory" | tee -a ${JOB_LOG}
+      mv ${LOCAL_PACKAGE_ROOT} ${BP_INSTALL_DIR} >> ${JOB_LOG} 2>&1
+      SMOKE_SCRIPT="./ci/smoke-${TOOL}.sh"
+      echo "[CI] running script for ${SMOKE_SCRIPT}" | tee -a ${JOB_LOG}
       ./ci/common/run-ci.sh ${SMOKE_SCRIPT}
   rules: !reference [.download_template, rules]
 
@@ -104,7 +105,7 @@ include: '.gitlab-ci.common.yml'
 # Currently only run on pushes, merge requests do not run separately
 workflow:
   rules:
-    - if: $CI_PIPELINE_SOURCE == "push" && $CI_COMMIT_BRANCH =~ "/^ci_.*$|master/"
+    - if: $CI_COMMIT_BRANCH =~ "/^ci_.*$|master/"
 
 stages:
   - image
@@ -134,11 +135,11 @@ build-tools:
   extends: [.tool_template]
   parallel:
     matrix:
-      - DOCKER_PLATFORM: ["ubuntu24.04", "centos7"]
+      - DOCKER_PLATFORM: ["centos7", "ubuntu24.04"]
         TOOL: ["boost", "verilator", "dromajo"]
-      - DOCKER_PLATFORM: ["ubuntu24.04", "centos7"]
+      - DOCKER_PLATFORM: ["centos7", "ubuntu24.04"]
         TOOL: ["spike", "surelog", "yslang", "axe"]
-      - DOCKER_PLATFORM: ["ubuntu24.04", "centos7"]
+      - DOCKER_PLATFORM: ["centos7", "ubuntu24.04"]
         TOOL: ["bsg_sv2v", "bsg_fakeram"]
   rules: !reference [.tool_template, rules]
   dependencies: [build-image]
