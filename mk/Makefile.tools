@@ -1,18 +1,4 @@
 
-$(eval $(call bsg_tgt_build_submodule,boost,,$(BP_TOUCH_DIR),$(BP_PATCH_DIR),$(BP_WORK_DIR)))
-%/.boost_build:
-	@$(eval BOOST_VERSION := 1.82.0)
-	@$(eval BOOST := boost_$(subst .,_,$(BOOST_VERSION)))
-	@$(eval BOOST_URL := https://sourceforge.net/projects/boost/files/boost)
-	@$(eval BOOST_DOWNLOAD := $(BOOST_URL)/$(BOOST_VERSION)/$(BOOST).tar.gz/download)
-	@$(eval CONFIG_SCRIPT := "import sysconfig; print(sysconfig.get_config_h_filename\(\)\)")
-	@$(eval CONFIG_H := $(shell python -c "import sysconfig; print(sysconfig.get_config_h_filename());"))
-	@$(eval CONFIG_DIR := $(dir $(CONFIG_H)))
-	@$(eval export CPLUS_INCLUDE_PATH := $(CONFIG_DIR):$(CPLUS_INCLUDE_PATH))
-	@$(WGET) -qO- $(BOOST_DOWNLOAD) | $(TAR) xzv -C $(@D) --strip-components=1
-	@$(CD) $(@D); ./bootstrap.sh --prefix=$(BP_INSTALL_DIR)
-	@$(CD) $(@D); ./b2 --prefix=$(BP_INSTALL_DIR) toolset=gcc install
-
 $(eval $(call bsg_tgt_build_submodule,axe,$(BP_AXE_DIR),$(BP_TOUCH_DIR),$(BP_PATCH_DIR),$(BP_WORK_DIR)))
 %/.axe_build:
 	@$(CD) $</src; ./make.sh
@@ -35,7 +21,8 @@ $(eval $(call bsg_tgt_build_submodule,bsg_sv2v,$(BP_SV2V_DIR),$(BP_TOUCH_DIR),$(
 
 $(eval $(call bsg_tgt_build_submodule,dromajo,$(BP_DROMAJO_DIR),$(BP_TOUCH_DIR),$(BP_PATCH_DIR),$(BP_WORK_DIR)))
 %/.dromajo_build:
-	@$(CMAKE) -S $< -B $(@D) -DCMAKE_BUILD_TYPE=Release
+	@$(eval EXTRA_CONFIGURE_FLAGS := )
+	@$(call bsg_fn_default_cmake,$(@D),$<,$(BP_INSTALL_DIR),$(EXTRA_CONFIGURE_FLAGS))
 	@$(MAKE) -C $(@D)
 	@$(CP) $(@D)/dromajo $(BP_BIN_DIR)
 	@$(CP) $(@D)/libdromajo_cosim.a $(BP_LIB_DIR)
@@ -43,19 +30,19 @@ $(eval $(call bsg_tgt_build_submodule,dromajo,$(BP_DROMAJO_DIR),$(BP_TOUCH_DIR),
 
 $(eval $(call bsg_tgt_build_submodule,spike,$(BP_SPIKE_DIR),$(BP_TOUCH_DIR),$(BP_PATCH_DIR),$(BP_WORK_DIR)))
 %/.spike_build:
-	@$(CD) $(@D); $</configure --prefix=$(BP_INSTALL_DIR) --srcdir=$< \
-		--without-boost --without-boost-asio --without-boost-regex
+	@$(eval EXTRA_CONFIGURE_FLAGS := --without-boost --without-boost-asio --without-boost-regex)
+	@$(call bsg_fn_default_configure,$(@D),$<,$(BP_INSTALL_DIR),$(EXTRA_CONFIGURE_FLAGS))
 	@$(MAKE) -C $(@D) install
 
 $(eval $(call bsg_tgt_build_submodule,surelog,$(BP_SURELOG_DIR),$(BP_TOUCH_DIR),$(BP_PATCH_DIR),$(BP_WORK_DIR)))
 %/.surelog_build:
-	@$(CMAKE) -S $< -B $(@D) -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=$(BP_INSTALL_DIR)
+	@$(call bsg_fn_default_cmake,$(@D),$<,$(BP_INSTALL_DIR),$(EXTRA_CONFIGURE_FLAGS))
 	@$(MAKE) -C $(@D) install
 
 $(eval $(call bsg_tgt_build_submodule,verilator,$(BP_VERILATOR_DIR),$(BP_TOUCH_DIR),$(BP_PATCH_DIR),$(BP_WORK_DIR)))
 %/.verilator_build:
-	@$(CD) $(@D); $(AUTOCONF) -o ./configure $</configure.ac
-	@$(CD) $(@D); ./configure --prefix=$(BP_INSTALL_DIR) --srcdir=$<
+	@$(eval EXTRA_CONFIGURE_FLAGS := )
+	@$(call bsg_fn_default_configure,$(@D),$<,$(BP_INSTALL_DIR),$(EXTRA_CONFIGURE_FLAGS))
 	@$(MAKE) -C $(@D) all
 	@$(MAKE) -C $(@D) install
 	@$(MAKE) -C $(@D) install-all
@@ -68,7 +55,7 @@ $(eval $(call bsg_tgt_build_submodule,yosys,$(BP_YOSYS_DIR),$(BP_TOUCH_DIR),$(BP
 
 $(eval $(call bsg_tgt_build_submodule,yslang,$(BP_YSLANG_DIR),$(BP_TOUCH_DIR),$(BP_PATCH_DIR),$(BP_WORK_DIR)))
 %/.yslang_build:
-	@$(eval YOSYS_PLUGIN_DIR := $(BP_INSTALL_DIR)/share/yosys/plugins)
+	@$(eval export YOSYS_PLUGIN_DIR := $(BP_INSTALL_DIR)/share/yosys/plugins)
 	@$(eval export YOSYS_PREFIX := $(BP_INSTALL_DIR)/bin/)
 	@$(MAKE) build.yosys
 	@$(MAKE) -C $<

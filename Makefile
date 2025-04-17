@@ -6,7 +6,6 @@ include $(BP_MK_DIR)/Makefile.*
 
 tools_lite: ## minimal set of simulation tools
 tools_lite: checkout
-	@$(MAKE) build.boost
 	@$(MAKE) build.verilator
 	@$(MAKE) build.dromajo
 

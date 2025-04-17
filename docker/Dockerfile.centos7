@@ -6,54 +6,78 @@ RUN sed -i 's|^mirrorlist=http|#mirrorlist=http|g' /etc/yum.repos.d/CentOS-*.rep
 RUN sed -i 's|^#.*baseurl=http|baseurl=http|g' /etc/yum.repos.d/CentOS-*.repo
 RUN sed -i 's|.*baseurl=http://mirror.centos.org/centos/\$releasever|baseurl=http://archive.kernel.org/centos-vault/7.9.2009|g' /etc/yum.repos.d/CentOS-*.repo
 
-# Install centos libraries
-RUN yum install -y \
+# Install common devel packages
+RUN yum install --nogpgcheck --setopt=tsflags=nodocs -y -q \
     autoconf automake bash bc binutils bison bzip2 cpio \
     dtc expat-devel file flex gawk gcc gcc-c++ git gmp-devel gzip gtkwave \
     java-11-openjdk-headless libmpc-devel libuuid-devel make mpfr-devel \
-    patch patchutils perl perl-ExtUtils-MakeMaker python3 python3-pip rsync \
+    patch patchutils perl perl-ExtUtils-MakeMaker rsync \
     sed tar tcl tcl-devel  tk tk-devel texinfo unzip vim vim-common virtualenv which zlib-devel \
-    help2man readline-devel libreadline-devel libffi-devel wget openssl-devel python-devel \
-    python3-devel python-devel \
-    && yum clean all
-
-# Install EPEL libraries
-RUN yum install -y \
+    help2man readline-devel libreadline-devel libffi-devel wget bzip2 bzip2-devel python-pip \
+    python-devel python3-devel openssl-devel openssl11 openssl11-devel openssl11-libs \
     epel-release centos-release-scl scl-utils \
-    && yum clean all
+    bzip2 bzip2-devel sqlite-devel \
+    && yum clean all && rm -rf /var/cache/yum
 
 # Same thing for SCL mirrors
 RUN sed -i 's|^mirrorlist|#mirrorlist|g' /etc/yum.repos.d/CentOS-*
 RUN sed -i 's|^#baseurl=http://mirror.centos.org/centos/7|baseurl=http://vault.epel.cloud/7.9.2009|g' /etc/yum.repos.d/CentOS-SCLo-*
 RUN sed -i 's|^# baseurl=http://mirror.centos.org/centos/7|baseurl=http://vault.epel.cloud/7.9.2009|g' /etc/yum.repos.d/CentOS-SCLo-*
 
-RUN yum install -y \
-    devtoolset-11 rh-git218 \
-    && yum clean all
-# Install cmake
-RUN wget https://cmake.org/files/v3.22/cmake-3.22.3.tar.gz && \
-    tar -xzvf cmake-3.* && \
-    cd cmake-3.* && \
-    ./bootstrap --prefix=/usr/local && \
-    make -j4 && \
-    make install
-# Install autotools
-RUN wget -qO- https://ftp.gnu.org/gnu/m4/m4-1.4.19.tar.gz | tar xzv; \
-    cd m4-1.4.19; ./configure; make all install
-RUN wget -qO- https://ftp.gnu.org/gnu/libtool/libtool-2.5.3.tar.gz | tar xzv; \
-    cd libtool-2.5.3; ./configure; make all install
-RUN wget -qO- https://ftp.gnu.org/gnu/automake/automake-1.17.tar.gz | tar xzv; \
-    cd automake-1.17; ./configure; make all install
-RUN wget -qO- https://ftp.gnu.org/gnu/autoconf/autoconf-2.69.tar.gz | tar xzv; \
-    cd autoconf-2.69; ./configure; make all install
+# Install EPEL modules
+RUN yum install --nogpgcheck --setopt=tsflags=nodocs -y -q \
+    devtoolset-11 rh-git218 openssl11 openssl11-devel openssl11-libs \
+    && yum clean all && rm -rf /var/cache/yum
 
-# Accept arguments for user and group
+# Install autotools
+RUN mkdir /build && cd /build && \
+    wget -qO- https://ftp.gnu.org/gnu/m4/m4-1.4.19.tar.gz | tar xz --strip-components=1 && \
+    ./configure --prefix=/opt/autotools && make -j4 install && \
+    rm -rf /build
+RUN mkdir /build && cd /build && \
+    wget -qO- https://ftp.gnu.org/gnu/libtool/libtool-2.5.3.tar.gz | tar xz --strip-components=1 && \
+    ./configure --prefix=/opt/autotools && make -j4 install && \
+    rm -rf /build
+RUN mkdir /build && cd /build && \
+    wget -qO- https://ftp.gnu.org/gnu/automake/automake-1.17.tar.gz | tar xz --strip-components=1 && \
+    ./configure --prefix=/opt/autotools && make -j4 install && \
+    rm -rf /build
+RUN mkdir /build && cd /build && \
+    wget -qO- https://ftp.gnu.org/gnu/autoconf/autoconf-2.69.tar.gz | tar xz --strip-components=1 && \
+    ./configure --prefix=/opt/autotools && make -j4 install && \
+    rm -rf /build
+# Install boost
+RUN mkdir /build && cd /build && \
+    wget -qO- https://sourceforge.net/projects/boost/files/boost/1.82.0/boost_1_82_0.tar.gz | tar xz --strip-components=1 && \
+    ./bootstrap.sh --prefix=/opt/boost && ./b2 --prefix=/opt/boost toolset=gcc install && \
+    rm -rf /build
+# Install cmake
+RUN mkdir /build && cd /build && \
+    wget -qO- https://cmake.org/files/v3.22/cmake-3.22.3.tar.gz | tar xz --strip-components=1 && \
+    ./bootstrap --prefix=/opt/cmake && make -j4 install && \
+    rm -rf /build
+# Install modern python
+RUN mkdir /build && cd /build && \
+    wget -qO- https://www.python.org/ftp/python/3.12.0/Python-3.12.0.tgz | tar xz --strip-components=1 && \
+    sed -i 's/PKG_CONFIG openssl /PKG_CONFIG openssl11 /g' configure && \
+    scl enable devtoolset-11 -- bash -c "\
+        cd /build && \
+        ./configure --prefix=/opt/python \
+            --enable-loadable-sqlite-extensions \
+            --enable-optimizations \
+            --with-lto && \
+        make -j4 all && \
+        make -j4 altinstall \
+    " && \
+    rm -rf /build
+
+## Accept arguments for user and group
 ARG USER_NAME
 ARG USER_ID
 ARG GROUP_NAME
 ARG GROUP_ID
 ARG OTHER_GROUPS
-ARG WORKDIR
+ARG WORKDIR=/work
 
 # Only create the group if it doesn't exist
 RUN getent group $GROUP_ID || groupadd --gid $GROUP_ID $GROUP_NAME
@@ -87,10 +111,9 @@ USER $USER_NAME
 
 # Create a python virtualenv
 ENV VIRTUAL_ENV=/opt/venv
-RUN python3 -m venv $VIRTUAL_ENV
+RUN /opt/python/bin/python3.12 -m venv $VIRTUAL_ENV
 COPY requirements.txt /opt/venv/
 RUN /opt/venv/bin/pip install -r /opt/venv/requirements.txt
-
 
 # Kick off with bash
 ENTRYPOINT [ "/usr/bin/entrypoint.sh" ]
