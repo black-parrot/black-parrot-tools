@@ -16,6 +16,7 @@ ARMV7 := $(if $(findstring armv7l,$(shell /usr/bin/arch)),1,0)
 AARCH64 := $(if $(findstring aarch64,$(shell /usr/bin/arch)),1,0)
 ARM := $(if $(ARMV7),1,$(if $(AARCH64),1,0))
 UBUNTU24 := $(if $(findstring Ubuntu 24,$(shell lsb_release -a 2>/dev/null)),1,0)
+NUMPROC := $(shell grep -c ^processor /proc/cpuinfo)
 
 #############################
 # Makefile variables templates
@@ -63,6 +64,33 @@ define bsg_fn_disable_submodules
 		git -C $$d config --local submodule.$$s.update none; \
 		git -C $$d submodule sync --recursive; \
 	done
+endef
+
+define bsg_fn_default_configure
+	$(eval $@_work := $(1))
+	$(eval $@_src := $(2))
+	$(eval $@_prefix := $(3))
+	$(eval $@_extra := $(4))
+	$(eval $@_strip := -s -Wl,--gc-sections)
+	cd ${$@_src}; autoconf -o ./configure || true
+	cd ${$@_work}; \
+		CFLAGS="$(CFLAGS)" \
+		CXXFLAGS="$(CXXFLAGS)" \
+		LDFLAGS="${$@_strip} $(LDFLAGS)" \
+		${$@_src}/configure --srcdir=${$@_src} --prefix=${$@_prefix} ${$@_extra}
+endef
+
+define bsg_fn_default_cmake
+	$(eval $@_work := $(1))
+	$(eval $@_src := $(2))
+	$(eval $@_prefix := $(3))
+	$(eval $@_extra := $(4))
+	$(eval $@_strip := -s -Wl,--gc-sections)
+	$(CMAKE) -B ${$@_work} -S ${$@_src} -DCMAKE_INSTALL_PREFIX=${$@_prefix} \
+		-DCMAKE_BUILD_TYPE=Release \
+		-DCMAKE_C_FLAGS="$(CFLAGS)" \
+		-DCMAKE_CXX_FLAGS="$(CXXFLAGS)" \
+		-DCMAKE_EXE_LINKER_FLAGS="${$@_strip} $(LDFLAGS)"
 endef
 
 define bsg_fn_info

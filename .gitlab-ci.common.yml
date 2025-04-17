@@ -5,8 +5,7 @@ variables:
   # Required Project Variables
   #########################################
   REPO_NAME: "setme"
-  DOCKER_PLATFORM: "setme"
-  CONTAINER_IMAGE: "${REGISTRY_IMAGE}:${DOCKER_PLATFORM}"
+  CONTAINER_IMAGE: "setme"
   #########################################
   # Required BSG Variables
   #########################################
@@ -25,10 +24,6 @@ variables:
   BUILDDIR: "${BSG_CI_BUILDDIR}"
   COMMONDIR: "${BSG_CI_COMMONDIR}"
   CADDIR: "${BSG_CI_CADDIR}"
-  #########################################
-  # BSG Flags
-  #########################################
-  FORCE_REBUILD: "${BSG_CI_FORCE_REBUILD}"
   #########################################
   # GitLab Variables
   #########################################
@@ -60,11 +55,23 @@ variables:
   FF_USE_FASTZIP: "true"
   #FF_ENABLE_JOB_CLEANUP: "true"
   #FF_SET_PERMISSIONS_BEFORE_CLEANUP: "true"
-  ARTIFACT_COMPRESSION_LEVEL: "fastest"
-  CACHE_COMPRESSION_LEVEL: "fastest"
+  ARTIFACT_COMPRESSION_LEVEL: "slowest"
+  CACHE_COMPRESSION_LEVEL: "slowest"
   # Enable docker caching
   DOCKER_BUILDKIT: "1"
   DOCKER_DRIVER: "overlay2"
+
+###################################################
+## Workflow
+###################################################
+
+# Currently only run on pushes, merge requests do not run separately
+workflow:
+  auto_cancel:
+    on_new_commit: interruptible
+    on_job_failure: all
+  rules:
+    - if: $CI_COMMIT_BRANCH =~ "/^ci_.*$|master/"
 
 ###################################################
 ## Anchors
@@ -81,22 +88,45 @@ variables:
     # https://docs.gitlab.com/ci/runners/configure_runners/#handling-concurrency
     GIT_CLONE_PATH: "${CI_BUILDS_DIR}/${REPO_NAME}/${CI_PIPELINE_ID}/${JOB_NAME_SLUG}"
   git_prefetch: &git_prefetch_script
+    - echo "[CI] configuring git to fetch with HTTP 1.1"
+    - git config --global http.version HTTP/1.1
+    - git config --global http.postBuffer 157286400
+    - echo "[CI] pre-fetching git repo from ${REFERENCE_REPO}"
     - |
-      echo "[CI] configuring git to fetch with HTTP 1.1"
-      git config --global http.version HTTP/1.1
-      git config --global http.postBuffer 157286400
-      echo "[CI] pre-fetching git repo from ${REFERENCE_REPO}"
       if [ -d ${GIT_CLONE_PATH} ]; then
         echo "[CI] git repo found at ${GIT_CLONE_PATH}"
       else
         git clone --no-checkout --reference=${REFERENCE_REPO} ${REPOSITORY_URL} ${GIT_CLONE_PATH}
       fi
-      echo "[CI] pre-fetching submodules from ${REFERENCE_REPO}"
-      git -C ${GIT_CLONE_PATH} submodule update --init --reference=${REFERENCE_REPO}
+    - echo "[CI] pre-fetching submodules from ${REFERENCE_REPO}"
+    - git -C ${GIT_CLONE_PATH} submodule update --init --reference=${REFERENCE_REPO}
   git_cleanup: &git_cleanup_script
-    - |
-      echo "[CI] cleaning up the submodules"
-      git submodule deinit --force --all
+    - echo "[CI] cleaning up the submodules"
+    - git submodule deinit --force --all
+
+# https://docs.gitlab.com/user/packages/package_registry/
+.api_anchors:
+  variables: &api_variables
+    API_PACKAGE_NAME: "setme"
+    API_PACKAGE_VER: "setme"
+    LOCAL_PACKAGE_ROOT: "setme"
+    # generated variables
+    API_PACKAGE_TGZ: "${API_PACKAGE_NAME}.tar.gz"
+    API_PROJECT_URL: "${API_V4_URL}/projects/${PROJECT_ID}"
+    API_PACKAGE_URL: "${API_PROJECT_URL}/packages/generic/${API_PACKAGE_NAME}"
+    API_CURL_URL: "${API_PACKAGE_URL}/${API_PACKAGE_VER}/${API_PACKAGE_TGZ}"
+  api_download: &api_download_script
+    - echo "[CI] downloading from ${API_CURL_URL}"
+    - >
+      curl --location --header "JOB-TOKEN: ${JOB_TOKEN}" ${API_CURL_URL}
+      | tar --totals -xzf - -C ${LOCAL_PACKAGE_ROOT} --strip-components=1
+        >> ${JOB_LOG} 2>&1
+  api_upload: &api_upload_script
+    - echo "[CI] uploading to ${API_CURL_URL}"
+    - >
+      tar --totals --warning=no-file-changed -C ${JOB_DEPS_ROOT} -czf - ${API_PACKAGE_NAME}
+      | curl --location --header "JOB-TOKEN: ${JOB_TOKEN}" --upload-file - ${API_CURL_URL}
+        >> ${JOB_LOG} 2>&1
 
 ###################################################
 ## Mixins
@@ -147,57 +177,48 @@ variables:
 
 .api_mixin:
   variables:
-    # template variables
-    LOCAL_PACKAGE_ROOT: "setme"
-    API_PACKAGE_NAME: "setme"
-    API_PACKAGE_VER: "setme"
-    # generated variables
-    LOCAL_PACKAGE_TGZ: "${LOCAL_PACKAGE_ROOT}.tar.gz"
-    API_PACKAGE_TGZ: "${API_PACKAGE_NAME}.tar.gz"
-    API_PROJECT_URL: "${API_V4_URL}/projects/${PROJECT_ID}"
-    API_PACKAGE_URL: "${API_PROJECT_URL}/packages/generic/${API_PACKAGE_NAME}"
-    API_CURL_URL: "${API_PACKAGE_URL}/${API_PACKAGE_VER}/${API_PACKAGE_TGZ}"
+    <<: *api_variables
 
 ###################################################
 ## Job Templates
 ###################################################
 .job_template:
   variables:
-    # default variables
-    JOB_WORK_ROOT: "${PROJECT_DIR}/work"
-    JOB_LOG_ROOT: "${PROJECT_DIR}/logs"
-    JOB_RPT_ROOT: "${PROJECT_DIR}/reports"
-    JOB_SUCCESS_ROOT: "${PROJECT_DIR}/artifacts/success"
-    JOB_FAILURE_ROOT: "${PROJECT_DIR}/artifacts/failure"
-    JOB_UPLOAD_ROOT: "${PROJECT_DIR}/artifacts/upload"
-    JOB_DOWNLOAD_ROOT: "${PROJECT_DIR}/artifacts/download"
-    JOB_DEPS_ROOT: "${PROJECT_DIR}/artifacts/deps"
-    # generated variables
-    JOB_LOG: "${JOB_LOG_ROOT}/${JOB_NAME_SLUG}.log"
-    JOB_RPT: "${JOB_RPT_ROOT}/${JOB_NAME_SLUG}.rpt"
+    # uploaded directories
+    JOB_LOG_ROOT: "logs"
+    JOB_RPT_ROOT: "reports"
+    JOB_SUCCESS_ROOT: "artifacts/success"
+    JOB_FAILURE_ROOT: "artifacts/failure"
+    # working directories
+    JOB_WORK_ROOT: "work"
+    JOB_DEPS_ROOT: "deps"
     # don't touch variables
-    DOTENV: "${PROJECT_DIR}/build.env"
+    JOB_LOG: "${JOB_LOG_ROOT}/${JOB_NAME_SLUG}.log"
+    JOB_RPT: "${JOB_RPT_ROOT}/${JOB_NAME_SLUG}.log"
+    DOTENV: "build.env"
   tags: [bsg] # use bsg machines by default
+  interruptible: true
   before_script:
+    - echo "[CI] job ${PROJECT_DIR} at ${GIT_CLONE_PATH}"
+    - echo "[CI] cleaning up from previous job"
+    - rm -rf ${JOB_FAILURE_ROOT}/* ${JOB_LOG_ROOT}/* ${JOB_RPT_ROOT}/*
+    - echo "[CI] initializing DOTENV"
+    - echo "DOTENV_TESTVAR=dotenv_testvar" | tee -a ${GITLAB_ENV} >> ${DOTENV}
+    - echo "[CI] initializing job directories"
     - |
-      echo "[CI] job ${CI_PROJECT_DIR} at ${GIT_CLONE_PATH}"
-      echo "[CI] cleaning up from previous job"
-      rm -rf ${JOB_FAILURE_ROOT}/* $JOB_LOG_ROOT/* $JOB_RPT_ROOT/*
-      echo "[CI] initializing job directories"
-      for d in "${JOB_WORK_ROOT} ${JOB_LOG_ROOT} ${JOB_RPT_ROOT}" \
-               "${JOB_SUCCESS_ROOT} ${JOB_FAILURE_ROOT} ${JOB_UPLOAD_ROOT}" \
-               "${JOB_DEPS_ROOT} ${JOB_DOWNLOAD_ROOT}"; do \
+      for d in "${JOB_LOG_ROOT} ${JOB_RPT_ROOT}" \
+               "${JOB_WORK_ROOT} ${JOB_DEPS_ROOT}" \
+               "${JOB_SUCCESS_ROOT} ${JOB_FAILURE_ROOT} ${JOB_DEPS_ROOT}"; do
         mkdir -p $d
         touch $d/.keep
       done
-      echo "[CI] initialize DOTENV"
-      echo "DOTENV_TESTVAR=dotenv_testvar" | tee -a ${GITLAB_ENV} >> ${DOTENV}
-      echo "[CI] moving artifacts from previous job"
-      for f in $(ls ${JOB_SUCCESS_ROOT}); do \
-        echo "[CI] artifact: $f"; \
-        mv ${JOB_SUCCESS_ROOT}/$f ${JOB_DEPS_ROOT}/$f; \
+    - echo "[CI] moving artifacts from previous job"
+    - |
+      for f in $(ls ${JOB_SUCCESS_ROOT}); do
+        echo "[CI] artifact: $f"
+        mv ${JOB_SUCCESS_ROOT}/$f ${JOB_DEPS_ROOT}/$f
       done
-      echo "[CI] starting job ${JOB_GROUP_NAME}" | tee -a ${JOB_LOG}
+    - echo "[CI] starting job ${JOB_GROUP_NAME}" | tee -a ${JOB_LOG}
   after_script:
     - |
       if [ $CI_JOB_STATUS == 'success' ]; then
@@ -207,16 +228,16 @@ variables:
         echo "[CI] job failed with status $CI_JOB_STATUS" | tee -a ${JOB_RPT}
         rm -rf ${JOB_SUCCESS_ROOT}/*
       fi
-      echo "unset variables:" >> ${JOB_RPT}
-      export | grep -s "setme" || true >> ${JOB_RPT}
-      echo "[CI] finishing job ${JOB_GROUP_NAME}" | tee -a ${JOB_LOG}
+    - echo "unset variables:" >> ${JOB_RPT}
+    - export | grep -s "setme" || true >> ${JOB_RPT}
+    - echo "[CI] finishing job ${JOB_GROUP_NAME}" | tee -a ${JOB_LOG}
   artifacts:
     access: "developer"
     expire_in: "1 week"
     when: always
     paths:
-      - $JOB_LOG
-      - $JOB_RPT
+      - $JOB_LOG_ROOT/
+      - $JOB_RPT_ROOT/
       - $JOB_SUCCESS_ROOT/
       - $JOB_FAILURE_ROOT/
     reports: {dotenv: $DOTENV}
@@ -232,105 +253,56 @@ variables:
   image: {name: docker:24.0.5}
   services: [docker:24.0.5-dind]
   variables:
-    DOCKERFILE_DIR: "setme"
+    DOCKERFILE_FORCE: ""
   before_script:
     - !reference [.job_template, before_script]
+    - echo "[CI] logging into docker registry" | tee -a ${JOB_LOG}
+    - echo "${REGISTRY_PASSWORD}" | docker login ${REGISTRY} -u ${REGISTRY_USER} --password-stdin
+    - echo "[CI] checking for previous docker image ${CONTAINER_IMAGE}" | tee -a ${JOB_LOG}
     - |
-      echo "[CI] logging into docker registry" | tee -a ${JOB_LOG}
-      echo "${REGISTRY_PASSWORD}" | docker login ${REGISTRY} -u ${REGISTRY_USER} --password-stdin
-      echo "[CI] checking for previous docker image ${CONTAINER_IMAGE}" | tee -a ${JOB_LOG}
       if docker manifest inspect ${CONTAINER_IMAGE} > /dev/null 2>&1; then
         echo "[CI] ${CONTAINER_IMAGE} exists, pulling..." | tee -a ${JOB_LOG}
-        docker pull ${CONTAINER_IMAGE}
+        docker pull ${CONTAINER_IMAGE} >> ${JOB_LOG} 2>&1
       else
         echo "[CI] ${CONTAINER_IMAGE} does not exist, starting from scratch"  | tee -a ${JOB_LOG}
       fi
   after_script:
-    - |
-      echo "[CI] logging into docker registry"  | tee -a ${JOB_LOG}
-      echo "${REGISTRY_PASSWORD}" | docker login ${REGISTRY} -u ${REGISTRY_USER} --password-stdin
-      echo "[CI] publishing docker images"  | tee -a ${JOB_LOG}
-      docker push ${CONTAINER_IMAGE}
+    - echo "[CI] logging into docker registry"  | tee -a ${JOB_LOG}
+    - echo "${REGISTRY_PASSWORD}" | docker login ${REGISTRY} -u ${REGISTRY_USER} --password-stdin
+    - echo "[CI] publishing docker images"  | tee -a ${JOB_LOG}
+    - docker push ${CONTAINER_IMAGE} >> ${JOB_LOG} 2>&1
     - !reference [.job_template, after_script]
   rules:
-    - if: $BSG_CI_FORCE_REBUILD == "1"
+    - if: $DOCKERFILE_FORCE != ""
       when: always
-    - changes:
-        paths:
-          - $DOCKERFILE_DIR/*
 
-# https://gitlab.com/gitlab-org/gitlab-runner/-/issues/1736#note_107983504
 .repo_template:
   extends: [.job_template, .fetch_mixin]
   image: {name: "${CONTAINER_IMAGE}"}
+  # https://gitlab.com/gitlab-org/gitlab-runner/-/issues/1736#note_107983504
   variables: {FF_DISABLE_UMASK_FOR_DOCKER_EXECUTOR: "true"}
   hooks: {pre_get_sources_script: !reference [.git_anchors, git_prefetch]}
   rules: !reference [.job_template, rules]
 
-.build_template:
-  extends: [.repo_template]
-  variables:
-    ARTIFACT_NAME: "setme"
-    BUILD_OUTPUT_ROOT: "setme"
-  after_script:
-    - BUILD_OUTPUT_BASE="$(basename ${BUILD_OUTPUT_ROOT})"
-    - BUILD_OUTPUT_DIR="$(dirname ${BUILD_OUTPUT_ROOT})"
-    - BUILD_OUTPUT_TGZ="${BUILD_OUTPUT_BASE}.tar.gz"
-    - JOB_ARTIFACT="${JOB_SUCCESS_ROOT}/${ARTIFACT_NAME}.tar.gz"
-    - |
-      if [ $CI_JOB_STATUS == 'success' ]; then
-        echo "[CI] zipping up ${BUILD_OUTPUT_ROOT}" | tee -a ${JOB_LOG}
-        tar --totals --warning=no-file-changed -czf \
-          ${BUILD_OUTPUT_TGZ} -C ${BUILD_OUTPUT_DIR} ${BUILD_OUTPUT_BASE} \
-            >> ${JOB_LOG} 2>&1
-        echo "[CI] Moving artifact to ${BUILD_ARTIFACT}"
-        mv ${BUILD_OUTPUT_TGZ} ${JOB_ARTIFACT}
-      fi
-    - !reference [.repo_template, after_script]
-
-# https://docs.gitlab.com/user/packages/package_registry/
 .upload_template:
   extends: [.repo_template, .api_mixin]
+  variables:
+    LOCAL_PACKAGE_ROOT: "${JOB_DEPS_ROOT}/${API_PACKAGE_NAME}"
   before_script:
     - !reference [.repo_template, before_script]
-    - |
-      echo "[CI] creating LOCAL_PACKAGE_ROOT=${LOCAL_PACKAGE_ROOT}" | tee -a ${JOB_LOG}
-      mkdir -p ${LOCAL_PACKAGE_ROOT} >> ${JOB_LOG} 2>&1
+    - mkdir -p ${LOCAL_PACKAGE_ROOT}
   after_script:
-    - |
-      LOCAL_PACKAGE_BASE="$(basename ${LOCAL_PACKAGE_ROOT})"
-      LOCAL_PACKAGE_DIR="$(dirname ${LOCAL_PACKAGE_ROOT})"
-      LOCAL_PACKAGE_TGZ="${LOCAL_PACKAGE_BASE}.tar.gz"
-      if [ $CI_JOB_STATUS == 'success' ]; then
-        echo "[CI] zipping installation ${LOCAL_PACKAGE_TGZ}" | tee -a ${JOB_LOG}
-        tar --totals --warning=no-file-changed -czf \
-          ${LOCAL_PACKAGE_TGZ} -C ${LOCAL_PACKAGE_DIR} ${LOCAL_PACKAGE_BASE} \
-            >> ${JOB_LOG} 2>&1
-        echo "[CI] publishing to ${API_CURL_URL} with curl API"
-        curl --location --header "JOB-TOKEN: ${JOB_TOKEN}" \
-             --upload-file ${LOCAL_PACKAGE_TGZ} \
-             ${API_CURL_URL}
-      fi
+    - !reference [.api_anchors, api_upload]
     - !reference [.repo_template, after_script]
   rules: !reference [.repo_template, rules]
 
-# https://docs.gitlab.com/user/packages/package_registry/
 .download_template:
   extends: [.repo_template, .api_mixin]
+  variables:
+    LOCAL_PACKAGE_ROOT: "${JOB_DEPS_ROOT}/${API_PACKAGE_NAME}"
   before_script:
     - !reference [.repo_template, before_script]
-    - |
-      LOCAL_PACKAGE_BASE="$(basename ${LOCAL_PACKAGE_ROOT})"
-      LOCAL_PACKAGE_DIR="$(dirname ${LOCAL_PACKAGE_ROOT})"
-      LOCAL_PACKAGE_TGZ="${LOCAL_PACKAGE_BASE}.tar.gz"
-      curl --location --header "JOB-TOKEN: ${JOB_TOKEN}" \
-           --output ${LOCAL_PACKAGE_TGZ} \
-           ${API_CURL_URL}
-      echo "[CI] creating LOCAL_PACKAGE_DIR=${LOCAL_PACKAGE_DIR}" | tee -a ${JOB_LOG}
-      mkdir -p ${LOCAL_PACKAGE_ROOT}
-      echo "[CI] unzipping installation ${LOCAL_PACKAGE_TGZ}" | tee -a ${JOB_LOG}
-      tar --totals -xzf \
-        ${LOCAL_PACKAGE_TGZ} -C ${LOCAL_PACKAGE_ROOT} --strip-components=1 \
-          >> ${JOB_LOG} 2>&1
+    - mkdir -p ${LOCAL_PACKAGE_ROOT}
+    - !reference [.api_anchors, api_download]
   rules: !reference [.repo_template, rules]
 
