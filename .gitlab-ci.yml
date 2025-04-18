@@ -92,13 +92,8 @@ stages:
     API_PACKAGE_NAME: "${TOOLS_PACKAGE}"
     API_PACKAGE_VER: "${COMMIT_REF_SLUG}"
   script:
-    - ls ${JOB_DEPS_ROOT}
-    - ls ${JOB_DEPS_ROOT}/${API_PACKAGE_NAME}
-    - ls ${JOB_DEPS_ROOT}/${API_PACKAGE_NAME}/*
     - echo "[CI] moving download to installation directory" | tee -a ${JOB_LOG}
     - mv ${JOB_DEPS_ROOT}/${API_PACKAGE_NAME} ${BP_INSTALL_DIR} >> ${JOB_LOG} 2>&1
-    - ls ${BP_INSTALL_DIR}
-    - ls ${BP_INSTALL_DIR}/*
     - SMOKE_SCRIPT="./ci/smoke-${TOOL}.sh"
     - echo "[CI] running script for ${SMOKE_SCRIPT}" | tee -a ${JOB_LOG}
     - ./ci/common/run-ci.sh ${SMOKE_SCRIPT}

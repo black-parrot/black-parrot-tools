@@ -1,15 +1,14 @@
 
-# Global Makefile settings
-# Saves initial values so that we can filter them later
-# MUST BE FIRST
-VARS_OLD := $(.VARIABLES)
+#############################
+# global settings
+#############################
 SHELL := /bin/bash
 EXTRAMAKEFLAGS += --warn-undefined-variables
 MAKEFLAGS += $(EXTRAMAKEFLAGS)
 .DEFAULT_GOAL: help
 
 #############################
-# Environment detection
+# environment detection
 #############################
 CENTOS7 := $(if $(findstring CentOS Linux release 7,$(shell cat /etc/centos-release 2>/dev/null)),1,0)
 ARMV7 := $(if $(findstring armv7l,$(shell /usr/bin/arch)),1,0)
@@ -18,8 +17,53 @@ ARM := $(if $(ARMV7),1,$(if $(AARCH64),1,0))
 UBUNTU24 := $(if $(findstring Ubuntu 24,$(shell lsb_release -a 2>/dev/null)),1,0)
 NUMPROC := $(shell grep -c ^processor /proc/cpuinfo)
 
+##########################################################
+## basic tools
+##########################################################
+AUTOCONF  ?= autoconf
+AWK       ?= awk
+BASENAME  ?= basename
+CAT       ?= cat
+CMAKE     ?= $(if $(shell which cmake3),cmake3,cmake)
+CD        ?= cd
+CP        ?= cp
+CURL      ?= curl
+CUT       ?= cut
+DIFF      ?= diff
+DOCKER    ?= docker
+ECHO      ?= echo
+ENVSUBST  ?= envsubst
+EXIT      ?= exit
+FILE      ?= file
+FIND      ?= find
+GCC       ?= gcc
+GIT       ?= git
+GIT_APPLY ?= $(GIT) apply --ignore-whitespace --ignore-space-change
+GIT_CHECK ?= $(GIT_APPLY) --check --reverse
+GREP      ?= grep
+MKDIR     ?= mkdir
+MKDIRP    ?= mkdir -p
+MV        ?= mv
+PRINTF    ?= printf
+PYTHON    ?= $(if $(shell which python3),python3,python)
+RM        ?= rm
+RMRF      ?= rm -rf
+SED       ?= sed
+STTY      ?= stty
+STRIP     ?= strip
+SYMLINK   ?= ln -nsf
+TAIL      ?= tail
+TAR       ?= tar
+TEE       ?= tee
+TEST      ?= test
+TOUCH     ?= touch
+TR        ?= tr
+WCOUNT    ?= wc -l
+WGET      ?= wget
+XXD       ?= xxd
+
 #############################
-# Makefile variables templates
+# variable templates
 #############################
 
 bsg_var_blank :=
@@ -30,39 +74,46 @@ endef
 
 bsg_var_percent := %
 
+define bsg_var_user
+	$(filter-out bsg_var_%,\
+		$(filter-out bsg_fn_%,\
+			$(filter-out $(VARS_OLD),$(.VARIABLES)\
+				)\
+			)\
+		)
+endef
+
 #############################
-# Makefile function templates
+# function templates
 #############################
 define bsg_fn_upper
-$(shell echo $(1) | tr a-z A-Z)
+	$(eval $@_var := $(1))
+	$(shell $(ECHO) $($@_var) | $(TR) a-z A-Z)
 endef
 
 define bsg_fn_lower
-$(shell echo $(1) | tr A-Z a-z)
+	$(eval $@_var := $(1))
+	$(shell $(ECHO) $(1) | $(TR) A-Z a-z)
 endef
 
-define bsg_fn_mksubdir
+define bsg_fn_mkhookdirs
 	$(eval $@_hookdirs := $(1))
-	$(eval $@_newvars := $(filter-out $(VARS_OLD),$(.VARIABLES)))
-	$(eval $@_bpvars := $(filter BP_%,$($@_newvars)))
-	$(eval $@_newdirs := $(foreach root,$($@_hookdirs),\
-		$(foreach var,$($@_bpvars),\
-			$(if $(filter $(root)%,$($(var))),\
-				$($(var))))\
-		)\
-	)
-	mkdir -p ${$@_hookdirs}
-	mkdir -p ${$@_newdirs}
+	$(eval $@_hookmatch := $(addsuffix /%,$($@_hookdirs)))
+	$(eval $@_uservars := $(call bsg_var_user))
+	$(eval $@_uppervars := $(filter $(call bsg_fn_upper,$($@_uservars)),$($@_uservars)))
+	$(eval $@_uppervals := $(foreach var,$($@_uppervars),$($(var))))
+	$(eval $@_filtered := $(filter $($@_hookmatch),$($@_uppervals)))
+	$(shell $(MKDIRP) $($@_hookdirs) $($@_filtered))
 endef
 
 define bsg_fn_disable_submodules
-	$(eval $@_subs := $(1))
-	for t in ${$@_subs}; do \
-		d=$$(echo $$t | cut -d '@' -f 1); \
-		s=$$(echo $$t | cut -d '@' -f 2); \
-		echo "Disabling checkout for $$d/$$s"; \
-		git -C $$d config --local submodule.$$s.update none; \
-		git -C $$d submodule sync --recursive; \
+	$(eval $@_submodules := $(1))
+	for t in ${$@_submodules}; do \
+	    d=$$($(ECHO) $$t | $(CUT) -d '@' -f 1); \
+	    s=$$($(ECHO) $$t | $(CUT) -d '@' -f 2); \
+	    $(ECHO) "Disabling checkout for $$d/$$s"; \
+	    $(GIT) -C $$d config --local submodule.$$s.update none; \
+	    $(GIT) -C $$d submodule sync --recursive; \
 	done
 endef
 
@@ -72,12 +123,12 @@ define bsg_fn_default_configure
 	$(eval $@_prefix := $(3))
 	$(eval $@_extra := $(4))
 	$(eval $@_strip := -s -Wl,--gc-sections)
-	cd ${$@_src}; autoconf -o ./configure || true
-	cd ${$@_work}; \
-		CFLAGS="$(CFLAGS)" \
-		CXXFLAGS="$(CXXFLAGS)" \
-		LDFLAGS="${$@_strip} $(LDFLAGS)" \
-		${$@_src}/configure --srcdir=${$@_src} --prefix=${$@_prefix} ${$@_extra}
+	$(CD) ${$@_src}; $(AUTOCONF) -o ./configure || true; \
+	$(CD) ${$@_work}; \
+	    CFLAGS="$(CFLAGS)" \
+	    CXXFLAGS="$(CXXFLAGS)" \
+	    LDFLAGS="${$@_strip} $(LDFLAGS)" \
+	    ${$@_src}/configure --srcdir=${$@_src} --prefix=${$@_prefix} ${$@_extra}
 endef
 
 define bsg_fn_default_cmake
@@ -87,33 +138,43 @@ define bsg_fn_default_cmake
 	$(eval $@_extra := $(4))
 	$(eval $@_strip := -s -Wl,--gc-sections)
 	$(CMAKE) -B ${$@_work} -S ${$@_src} -DCMAKE_INSTALL_PREFIX=${$@_prefix} \
-		-DCMAKE_BUILD_TYPE=Release \
-		-DCMAKE_C_FLAGS="$(CFLAGS)" \
-		-DCMAKE_CXX_FLAGS="$(CXXFLAGS)" \
-		-DCMAKE_EXE_LINKER_FLAGS="${$@_strip} $(LDFLAGS)"
+	    -DCMAKE_BUILD_TYPE=Release \
+	    -DCMAKE_C_FLAGS="$(CFLAGS)" \
+	    -DCMAKE_CXX_FLAGS="$(CXXFLAGS)" \
+	    -DCMAKE_EXE_LINKER_FLAGS="${$@_strip} $(LDFLAGS)"
+endef
+
+define bsg_fn_strip_binaries
+	$(eval $@_install := $(1))
+	$(FIND) $($@_install) -type f -exec sh -c '\
+		for file; do \
+			if $(FILE) "$$file" | $(GREP) -qE "ELF (.* )?(executable|shared)"; then \
+				$(STRIP) "$$file"; \
+			fi; \
+	done \
+	' sh {} +
 endef
 
 define bsg_fn_info
 	$(eval $@_msg = $(1))
 	$(eval $@_prefix = "BSG-INFO: ")
-	echo "${$@_prefix} ${$@_msg}"
+	$(ECHO) "$($@_prefix) $($@_msg)"
 endef
 
 define bsg_fn_warn
 	$(eval $@_msg = $(1))
 	$(eval $@_prefix = "BSG-WARN: ")
-	echo "${$@_prefix} ${$@_msg}"
+	$(ECHO) "$($@_prefix) $($@_msg)"
 endef
 
 define bsg_fn_error
 	$(eval $@_msg = $(1))
 	$(eval $@_prefix = "BSG-ERROR: ")
-	echo "${$@_prefix} ${$@_msg}"
-	exit -1
+	$(ECHO) "$($@_prefix) $($@_msg)"
 endef
 
 #############################
-# Makefile target templates
+# target templates
 #############################
 
 define bsg_tgt_build_tag
@@ -135,43 +196,41 @@ define bsg_tgt_build_tag
 	$(eval internal_target := $(work_dir)/$(name)/.$(name)_build)
 $(patch_target): | $(patch_tag)
 $(repatch_target):
-	@rm -f $(touch_dir)/$(name).patch.*
+	@$(RM) -f $(touch_dir)/$(name).patch.*
 	@if [ -f $(src_dir)/.git ]; then \
-		git submodule deinit -f $(src_dir); \
-		git submodule init $(src_dir); \
-		git submodule update $(src_dir); \
+		$(GIT) submodule deinit -f $(src_dir); \
+		$(GIT) submodule init $(src_dir); \
+		$(GIT) submodule update $(src_dir); \
 	fi
 	@+$(MAKE) $(patch_tag)
 $(patch_tag):
-	$(eval patch_root := $(patch_dir)/$(if $(src_dir),$(shell basename $(src_dir)),$(name)))
-	$(eval patch_files := $(shell find $(patch_root) -name "*.patch" 2>/dev/null))
-	$(eval apply_patch := git apply --ignore-whitespace --ignore-space-change)
-	$(eval check_patch := $(apply_patch) --check --reverse)
+	@$(eval patch_root := $(patch_dir)/$(if $(src_dir),$(shell $(BASENAME) $(src_dir)),$(name)))
+	@$(eval patch_files := $(shell $(FIND) $(patch_root) -name "*.patch" 2>/dev/null))
 	@if [ -f $(src_dir)/.git ]; then \
-		echo "Synchronizing submodules for $(name)"; \
-		git -C $(src_dir) submodule sync --recursive; \
-		echo "Checking out submodules for $(name)"; \
-		git -C $(src_dir) submodule update --init --recursive; \
+		$(ECHO) "Synchronizing submodules for $(name)"; \
+		$(GIT) -C $(src_dir) submodule sync --recursive; \
+		$(ECHO) "Checking out submodules for $(name)"; \
+		$(GIT) -C $(src_dir) submodule update --init --recursive; \
 	fi
-	@# For some reason the bash for loop doesn't work here
-	@echo "Applying patches $(patch_files)"
+	# For some reason the bash for loop doesn't work here
+	@$(ECHO) "Applying patches $(patch_files)"
 	@$(foreach p,$(patch_files),\
-		$(apply_patch) $(p) --directory $(dir $(subst $(patch_dir)/,,$(p)));\
+		$(GIT_APPLY) $(p) --directory $(dir $(subst $(patch_dir)/,,$(p)));\
 	)
-	@echo "Checking patches $(patch_files)"
+	@$(ECHO) "Checking patches $(patch_files)"
 	@$(foreach p,$(patch_files),\
-		$(check_patch) $(p) --directory $(dir $(subst $(patch_dir)/,,$(p)));\
+		$(GIT_CHECK) $(p) --directory $(dir $(subst $(patch_dir)/,,$(p)));\
 	)
-	@touch $$@
+	@$(TOUCH) $$@
 $(build_target): | $(build_tag)
 $(rebuild_target):
-	@rm -f $(touch_dir)/$(name).build.*
-	@rm -rf $(work_dir)/$(name)
+	@$(RMRF) $(touch_dir)/$(name).build.*
+	@$(RMRF)  $(work_dir)/$(name)
 	@+$(MAKE) $(build_tag)
 $(build_tag): | $(patch_tag)
-	@mkdir -p $(work_dir)/$(name)
+	@$(MKDIRP) $(work_dir)/$(name)
 	@+$(MAKE) $(internal_target)
-	@touch $$@
+	@$(TOUCH) $$@
 $(internal_target): $(src_dir)
 endef
 
@@ -181,7 +240,7 @@ define bsg_tgt_build_submodule
 	$(eval touch_dir := $(3))
 	$(eval patch_dir := $(4))
 	$(eval work_dir := $(5))
-	$(eval tag := $(if $(src_dir),$(shell cd $(src_dir); git rev-parse HEAD),any))
+	$(eval tag := $(if $(src_dir),$(shell $(CD) $(src_dir); $(GIT) rev-parse HEAD),any))
 	$(eval $(call bsg_tgt_build_tag,$(name),$(src_dir),$(touch_dir),$(patch_dir),$(work_dir),$(tag)))
 endef
 
@@ -191,26 +250,26 @@ endef
 # Global help target
 .PHONY: help
 help: ## prints this message
-	@egrep -h '\s##\s' $(MAKEFILE_LIST) | sort \
-		| awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m  %-30s\033[0m %s\n", $$1, $$2}'
+	@$(GREP) -h '\s##\s' $(MAKEFILE_LIST) | sort \
+		| $(AWK) 'BEGIN {FS = ":.*?## "}; {printf "\033[36m  %-30s\033[0m %s\n", $$1, $$2}'
 
 # Global reset
 .PHONY: bleach_all
 bleach_all: ## wipes the whole repo clean. Use with caution
-	@git -C "$(git rev-parse --show-toplevel)" submodule deinit -f .
-	@git -C "$(git rev-parse --show-toplevel)" clean -ffdx
+	@$(GIT) -C "$(git rev-parse --show-toplevel)" submodule deinit -f .
+	@$(GIT) -C "$(git rev-parse --show-toplevel)" clean -ffdx
 
 # Global checkout
 .PHONY: checkout
 checkout: ## checkout submodules
-	@$(call bsg_fn_mksubdir,$(HOOK_CHECKOUT_DIRS))
+	@$(call bsg_fn_mkhookdirs,$(HOOK_CHECKOUT_DIRS))
 	# Synchronize any pending updates
-	@git submodule sync
-	@git submodule init
+	@$(GIT) submodule sync
+	@$(GIT) submodule init
 	# Disable long checkouts
 	@$(call bsg_fn_disable_submodules,$(HOOK_DISABLE_SUBMODULES))
 	# Do the checkout
-	@git submodule update
+	@$(GIT) submodule update
 
 ##########################################################
 ## Cad environment
@@ -238,50 +297,18 @@ include $(BSG_CADENV_DIR)/cadenv.mk
 	@$(eval export CADENV_URL := git@github.com:bespoke-silicon-group/bsg_cadenv)
 	# Recursive make to include the new fragment
 	@if [ -f "$(BSG_CADENV_DIR)/cadenv.mk" ]; then \
-		echo "bsg_cadenv already exists"; \
+		$(ECHO) "bsg_cadenv already exists"; \
 	elif [[ ! -z $$(git ls-remote --exit-code $${CADENV_URL} HEAD 2> /dev/null) ]]; then \
-		git clone --recurse-submodules $${CADENV_URL} $(@D); \
+		$(GIT) clone --recurse-submodules $${CADENV_URL} $(@D); \
 	else \
-		echo "bsg_cadenv not found"; \
-		mkdir -p $(@D); \
-		touch $@; \
+		$(ECHO) "bsg_cadenv not found"; \
+		$(MKDIRP) $(@D); \
+		$(TOUCH) $@; \
 	fi
-	@echo "Successfully built $@!"
+	@$(ECHO) "Successfully built $@!"
 endif
 
-##########################################################
-## Other tools
-##########################################################
-AUTOCONF  ?= autoconf
-CAT       ?= cat
-CMAKE     ?= $(if $(shell which cmake3),cmake3,cmake)
-CD        ?= cd
-CP        ?= cp
-CURL      ?= curl
-DIFF      ?= diff
-DOCKER    ?= docker
-ECHO      ?= echo
-ENVSUBST  ?= envsubst
-EXIT      ?= exit
-FIND      ?= find
-GCC       ?= gcc
-GIT       ?= git
-GREP      ?= grep
-MKDIR     ?= mkdir
-MV        ?= mv
-PRINTF    ?= printf
-PYTHON    ?= $(if $(shell which python3),python3,python)
-RM        ?= rm
-RMRF      ?= rm -rf
-SED       ?= sed
-STTY      ?= stty
-SYMLINK   ?= ln -nsf
-TAIL      ?= tail
-TAR       ?= tar
-TEE       ?= tee
-TEST      ?= test
-TOUCH     ?= touch
-WCOUNT    ?= wc -l
-WGET      ?= wget
-XXD       ?= xxd
+# Saves initial values so that we can filter them later
+# MUST BE BEFORE THE PROJECT VARIABLES
+VARS_OLD := $(.VARIABLES)
 
