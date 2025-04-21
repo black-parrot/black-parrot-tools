@@ -243,8 +243,6 @@ workflow:
     reports: {dotenv: $DOTENV}
   # Default rules
   rules: [when: on_success]
-  # Default dependencies
-  dependencies: []
 
 ## https://docs.gitlab.com/ee/user/packages/container_registry/build_and_push_images.html
 .docker_template:

@@ -24,15 +24,8 @@ include: '.gitlab-ci.common.yml'
 ## templates
 ###################################################
 
-stages:
-  - image
-  - build
-  - publish
-  - run
-
 .image_template:
   extends: [.docker_template, .bp_tools_mixin]
-  stage: image
   script:
     - echo "[CI] building image ${CONTAINER_IMAGE}" | tee -a ${JOB_LOG}
     - |
@@ -55,7 +48,6 @@ stages:
 
 .tool_template:
   extends: [.repo_template, .bp_tools_mixin]
-  stage: build
   variables:
     TOOL: "setme"
   script:
@@ -71,30 +63,30 @@ stages:
 
 .publish_template:
   extends: [.upload_template, .bp_tools_mixin]
-  stage: publish
   variables:
+    WILDCARD: "setme"
+    PACKAGE: "setme"
     # template variables
-    API_PACKAGE_NAME: "${TOOLS_PACKAGE}"
+    API_PACKAGE_NAME: "${PACKAGE}"
     API_PACKAGE_VER: "${COMMIT_REF_SLUG}"
   script:
       # filtering is only necessary because we're downloading all artifacts
       #   and need to separate out the correct platform artifacts
     - cd ${JOB_DEPS_ROOT}
-    - find -maxdepth 1 -type d -name "${TOOLS_WILDCARD}" -exec rsync -a {}/ ${API_PACKAGE_NAME}/ \;
+    - find -maxdepth 1 -type d -name "${WILDCARD}" -exec rsync -a {}/ ${API_PACKAGE_NAME}/ \;
   rules: !reference [.upload_template, rules]
 
 .smoke_template:
   extends: [.download_template, .bp_tools_mixin]
-  stage: run
   variables:
     TOOL: "setme"
+    SMOKE_SCRIPT: "./ci/smoke-${TOOL}.sh"
     # template variables
     API_PACKAGE_NAME: "${TOOLS_PACKAGE}"
     API_PACKAGE_VER: "${COMMIT_REF_SLUG}"
   script:
     - echo "[CI] moving download to installation directory" | tee -a ${JOB_LOG}
     - mv ${JOB_DEPS_ROOT}/${API_PACKAGE_NAME} ${BP_INSTALL_DIR} >> ${JOB_LOG} 2>&1
-    - SMOKE_SCRIPT="./ci/smoke-${TOOL}.sh"
     - echo "[CI] running script for ${SMOKE_SCRIPT}" | tee -a ${JOB_LOG}
     - ./ci/common/run-ci.sh ${SMOKE_SCRIPT}
   rules: !reference [.download_template, rules]
@@ -115,6 +107,7 @@ build-image:
   parallel:
     matrix:
       - DOCKER_PLATFORM: ["centos7", "ubuntu24.04"]
+  needs: []
   rules: !reference [.image_template, rules]
 
 build-tools:
@@ -122,23 +115,24 @@ build-tools:
   parallel:
     matrix:
       - DOCKER_PLATFORM: ["centos7", "ubuntu24.04"]
-        TOOL: ["dromajo"]
-      - DOCKER_PLATFORM: ["centos7", "ubuntu24.04"]
         TOOL: ["verilator", "dromajo"]
       - DOCKER_PLATFORM: ["centos7", "ubuntu24.04"]
         TOOL: ["spike", "surelog", "yslang", "axe"]
       - DOCKER_PLATFORM: ["centos7", "ubuntu24.04"]
         TOOL: ["bsg_sv2v", "bsg_fakeram"]
+  needs: [{job: build-image, optional: true}]
   rules: !reference [.tool_template, rules]
-  dependencies: [build-image]
 
 publish-tools:
   extends: [.publish_template]
+  variables:
+    WILDCARD: "${TOOLS_WILDCARD}"
+    PACKAGE: "${TOOLS_PACKAGE}"
   parallel:
     matrix:
       - DOCKER_PLATFORM: ["centos7", "ubuntu24.04"]
+  needs: [{job: build-tools}]
   rules: !reference [.publish_template, rules]
-  dependencies: [build-tools]
 
 run-smoke:
   extends: [.smoke_template]
@@ -146,6 +140,6 @@ run-smoke:
     matrix:
       - DOCKER_PLATFORM: ["centos7", "ubuntu24.04"]
         TOOL: ["verilator", "yosys"]
+  needs: [{job: publish-tools}]
   rules: !reference [.smoke_template, rules]
-  dependencies: [publish-tools]
 
