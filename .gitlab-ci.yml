@@ -24,18 +24,17 @@ include: '.gitlab-ci.common.yml'
 ## templates
 ###################################################
 
-.image_template:
+.image_job:
   extends: [.docker_template, .bp_tools_mixin]
   script:
     - echo "[CI] building image ${CONTAINER_IMAGE}" | tee -a ${JOB_LOG}
-    - |
-      docker build docker -f docker/Dockerfile.${DOCKER_PLATFORM} \
-        --build-arg BUILDKIT_INLINE_CACHE=1 --cache-from ${CONTAINER_IMAGE} \
-        --build-arg USER_NAME="${USER_NAME}" \
-        --build-arg USER_ID="${USER_ID}" \
-        --build-arg GROUP_NAME="${GROUP_NAME}" \
-        --build-arg GROUP_ID="${GROUP_ID}" \
-        --build-arg OTHER_GROUPS="${OTHER_GROUPS}" \
+    - docker build docker -f docker/Dockerfile.${DOCKER_PLATFORM}
+        --build-arg BUILDKIT_INLINE_CACHE=1 --cache-from ${CONTAINER_IMAGE}
+        --build-arg USER_NAME="${USER_NAME}"
+        --build-arg USER_ID="${USER_ID}"
+        --build-arg GROUP_NAME="${GROUP_NAME}"
+        --build-arg GROUP_ID="${GROUP_ID}"
+        --build-arg OTHER_GROUPS="${OTHER_GROUPS}"
         -t ${CONTAINER_IMAGE} >> ${JOB_LOG} 2>&1
   rules:
     - !reference [.docker_template, rules]
@@ -46,7 +45,7 @@ include: '.gitlab-ci.common.yml'
           - docker/entrypoint.*
           - docker/requirements.txt
 
-.tool_template:
+.build_job:
   extends: [.repo_template, .bp_tools_mixin]
   variables:
     TOOL: "setme"
@@ -61,35 +60,39 @@ include: '.gitlab-ci.common.yml'
     - mv ${BP_INSTALL_DIR} ${JOB_SUCCESS_ROOT}/${TOOLS_ARTIFACT}
   rules: !reference [.repo_template, rules]
 
-.publish_template:
+.scatter_job:
   extends: [.upload_template, .bp_tools_mixin]
   variables:
-    WILDCARD: "setme"
-    PACKAGE: "setme"
     # template variables
-    API_PACKAGE_NAME: "${PACKAGE}"
-    API_PACKAGE_VER: "${COMMIT_REF_SLUG}"
-  script:
-      # filtering is only necessary because we're downloading all artifacts
-      #   and need to separate out the correct platform artifacts
-    - cd ${JOB_DEPS_ROOT}
-    - find -maxdepth 1 -type d -name "${WILDCARD}" -exec rsync -a {}/ ${API_PACKAGE_NAME}/ \;
-  rules: !reference [.upload_template, rules]
-
-.smoke_template:
-  extends: [.download_template, .bp_tools_mixin]
-  variables:
-    TOOL: "setme"
-    SMOKE_SCRIPT: "./ci/smoke-${TOOL}.sh"
-    # template variables
+    API_WILDCARD: "${TOOLS_WILDCARD}"
     API_PACKAGE_NAME: "${TOOLS_PACKAGE}"
     API_PACKAGE_VER: "${COMMIT_REF_SLUG}"
   script:
-    - echo "[CI] moving download to installation directory" | tee -a ${JOB_LOG}
-    - mv ${JOB_DEPS_ROOT}/${API_PACKAGE_NAME} ${BP_INSTALL_DIR} >> ${JOB_LOG} 2>&1
+    - echo "[CI] publishing to url ${API_CURL_URL}" | tee -a ${JOB_LOG}
+  rules: !reference [.upload_template, rules]
+
+.gather_job:
+  extends: [.download_template, .bp_tools_mixin]
+  variables:
+    # template variables
+    API_WILDCARD: "${TOOLS_PACKAGE}"
+    API_PACKAGE_NAME: "${TOOLS_PACKAGE}"
+    API_PACKAGE_VER: "${COMMIT_REF_SLUG}"
+  script:
+    - echo "[CI] downloaded from url ${API_CURL_URL}" | tee -a ${JOB_LOG}
+  rules: !reference [.download_template, rules]
+
+.smoke_job:
+  extends: [.repo_template, .bp_tools_mixin]
+  variables:
+    TOOL: "setme"
+  script:
+    - SMOKE_SCRIPT="./ci/smoke-${TOOL}.sh"
+    - echo "[CI] moving package to installation directory" | tee -a ${JOB_LOG}
+    - mv ${JOB_DEPS_ROOT}/${TOOLS_PACKAGE} ${BP_INSTALL_DIR} >> ${JOB_LOG} 2>&1
     - echo "[CI] running script for ${SMOKE_SCRIPT}" | tee -a ${JOB_LOG}
     - ./ci/common/run-ci.sh ${SMOKE_SCRIPT}
-  rules: !reference [.download_template, rules]
+  rules: !reference [.repo_template, rules]
 
 ###################################################
 ## Actual Jobs
@@ -102,44 +105,51 @@ include: '.gitlab-ci.common.yml'
 #    matrix:
 #      - DOCKER_PLATFORM: $DOCKER_PLATFORM
 
-build-image:
-  extends: [.image_template]
+image-tools:
+  extends: [.image_job]
   parallel:
     matrix:
       - DOCKER_PLATFORM: ["centos7", "ubuntu24.04"]
   needs: []
-  rules: !reference [.image_template, rules]
+  rules: !reference [.image_job, rules]
 
 build-tools:
-  extends: [.tool_template]
+  extends: [.build_job]
   parallel:
     matrix:
       - DOCKER_PLATFORM: ["centos7", "ubuntu24.04"]
         TOOL: ["verilator", "dromajo"]
       - DOCKER_PLATFORM: ["centos7", "ubuntu24.04"]
-        TOOL: ["spike", "surelog", "yslang", "axe"]
+        TOOL: ["spike", "surelog", "yosys", "axe"]
       - DOCKER_PLATFORM: ["centos7", "ubuntu24.04"]
-        TOOL: ["bsg_sv2v", "bsg_fakeram"]
-  needs: [{job: build-image, optional: true}]
-  rules: !reference [.tool_template, rules]
+        TOOL: ["yslang", "bsg_sv2v", "bsg_fakeram"]
+  needs: [{job: image-docker, optional: true}]
+  rules: !reference [.build_job, rules]
 
-publish-tools:
-  extends: [.publish_template]
-  variables:
-    WILDCARD: "${TOOLS_WILDCARD}"
-    PACKAGE: "${TOOLS_PACKAGE}"
+scatter-tools:
+  extends: [.scatter_job]
   parallel:
     matrix:
       - DOCKER_PLATFORM: ["centos7", "ubuntu24.04"]
   needs: [{job: build-tools}]
-  rules: !reference [.publish_template, rules]
+  rules: !reference [.scatter_job, rules]
 
-run-smoke:
-  extends: [.smoke_template]
+gather-tools:
+  extends: [.gather_job]
   parallel:
     matrix:
       - DOCKER_PLATFORM: ["centos7", "ubuntu24.04"]
-        TOOL: ["verilator", "yosys"]
-  needs: [{job: publish-tools}]
-  rules: !reference [.smoke_template, rules]
+  needs: [{job: scatter-tools, optional: true}]
+  rules: !reference [.gather_job, rules]
+
+smoke-tools:
+  extends: [.smoke_job]
+  parallel:
+    matrix:
+      - DOCKER_PLATFORM: ["centos7", "ubuntu24.04"]
+        TOOL: ["verilator", "dromajo"]
+      - DOCKER_PLATFORM: ["centos7", "ubuntu24.04"]
+        TOOL: ["spike", "surelog", "yosys", "axe"]
+  needs: [{job: gather-tools}]
+  rules: !reference [.smoke_job, rules]
 

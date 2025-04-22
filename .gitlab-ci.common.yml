@@ -55,8 +55,8 @@ variables:
   FF_USE_FASTZIP: "true"
   #FF_ENABLE_JOB_CLEANUP: "true"
   #FF_SET_PERMISSIONS_BEFORE_CLEANUP: "true"
-  ARTIFACT_COMPRESSION_LEVEL: "slowest"
-  CACHE_COMPRESSION_LEVEL: "slowest"
+  ARTIFACT_COMPRESSION_LEVEL: "fastest"
+  CACHE_COMPRESSION_LEVEL: "fastest"
   # Enable docker caching
   DOCKER_BUILDKIT: "1"
   DOCKER_DRIVER: "overlay2"
@@ -109,24 +109,33 @@ workflow:
   variables: &api_variables
     API_PACKAGE_NAME: "setme"
     API_PACKAGE_VER: "setme"
-    LOCAL_PACKAGE_ROOT: "setme"
+    API_WILDCARD: "setme"
     # generated variables
+    API_WORK_ROOT: "${JOB_WORK_ROOT}/${API_PACKAGE_NAME}"
     API_PACKAGE_TGZ: "${API_PACKAGE_NAME}.tar.gz"
     API_PROJECT_URL: "${API_V4_URL}/projects/${PROJECT_ID}"
     API_PACKAGE_URL: "${API_PROJECT_URL}/packages/generic/${API_PACKAGE_NAME}"
     API_CURL_URL: "${API_PACKAGE_URL}/${API_PACKAGE_VER}/${API_PACKAGE_TGZ}"
-  api_download: &api_download_script
-    - echo "[CI] downloading from ${API_CURL_URL}"
-    - >
-      curl --location --header "JOB-TOKEN: ${JOB_TOKEN}" ${API_CURL_URL}
-      | tar --totals -xzf - -C ${LOCAL_PACKAGE_ROOT} --strip-components=1
-        >> ${JOB_LOG} 2>&1
   api_upload: &api_upload_script
+    - echo "[CI] gathering inputs for ${API_PACKAGE_NAME}" | tee -a ${JOB_LOG}
+    - mkdir -p ${API_WORK_ROOT}
+    - find ${JOB_DEPS_ROOT} -maxdepth 1 -type d -name ${API_WILDCARD}
+        -exec rsync --remove-source-files -a {}/ ${JOB_WORK_ROOT}/${API_PACKAGE_NAME} \;
     - echo "[CI] uploading to ${API_CURL_URL}"
     - >
-      tar --totals --warning=no-file-changed -C ${JOB_DEPS_ROOT} -czf - ${API_PACKAGE_NAME}
+      tar --totals --warning=no-file-changed -C ${JOB_WORK_ROOT} -czf - ${API_PACKAGE_NAME}
       | curl --location --header "JOB-TOKEN: ${JOB_TOKEN}" --upload-file - ${API_CURL_URL}
-        >> ${JOB_LOG} 2>&1
+          >> ${JOB_LOG} 2>&1
+  api_download: &api_download_script
+    - echo "[CI] downloading from ${API_CURL_URL}"
+    - mkdir -p ${API_WORK_ROOT}
+    - >
+      curl --location --header "JOB-TOKEN: ${JOB_TOKEN}" ${API_CURL_URL}
+      | tar --totals --warning=no-file-changed -xzf - -C ${API_WORK_ROOT} --strip-components=1
+          >> ${JOB_LOG} 2>&1
+    - echo "[CI] scattering inputs for ${API_PACKAGE_NAME}" | tee -a ${JOB_LOG}
+    - find ${JOB_WORK_ROOT} -maxdepth 1 -type d -name ${API_WILDCARD}
+        -exec rsync --remove-source-files -a {}/ ${JOB_SUCCESS_ROOT}/${API_PACKAGE_NAME}/ \;
 
 ###################################################
 ## Mixins
@@ -143,7 +152,7 @@ workflow:
     GIT_STRATEGY: "none"
     GIT_DEPTH: ""
     GIT_FETCH_EXTRA_FLAGS: "none"
-    GIT_CHECKOUT: "none"
+    GIT_CHECKOUT: "false"
     GIT_CLEAN_FLAGS: "none"
     GIT_SUBMODULE_STRATEGY: "none"
     GIT_SUBMODULE_UPDATE_FLAGS: "none"
@@ -176,6 +185,7 @@ workflow:
     GIT_SUBMODULE_DEPTH: "3"
 
 .api_mixin:
+  extends: [.bare_mixin]
   variables:
     <<: *api_variables
 
@@ -194,7 +204,7 @@ workflow:
     JOB_DEPS_ROOT: "deps"
     # don't touch variables
     JOB_LOG: "${JOB_LOG_ROOT}/${JOB_NAME_SLUG}.log"
-    JOB_RPT: "${JOB_RPT_ROOT}/${JOB_NAME_SLUG}.log"
+    JOB_RPT: "${JOB_RPT_ROOT}/${JOB_NAME_SLUG}.rpt"
     DOTENV: "build.env"
   tags: [bsg] # use bsg machines by default
   interruptible: true
@@ -219,6 +229,8 @@ workflow:
         mv ${JOB_SUCCESS_ROOT}/$f ${JOB_DEPS_ROOT}/$f
       done
     - echo "[CI] starting job ${JOB_GROUP_NAME}" | tee -a ${JOB_LOG}
+    - echo "[CI] unset variables" >> ${JOB_RPT}
+    - (export | grep -s "setme" || true) >> ${JOB_RPT}
   after_script:
     - |
       if [ $CI_JOB_STATUS == 'success' ]; then
@@ -228,8 +240,6 @@ workflow:
         echo "[CI] job failed with status $CI_JOB_STATUS" | tee -a ${JOB_RPT}
         rm -rf ${JOB_SUCCESS_ROOT}/*
       fi
-    - echo "unset variables:" >> ${JOB_RPT}
-    - export | grep -s "setme" || true >> ${JOB_RPT}
     - echo "[CI] finishing job ${JOB_GROUP_NAME}" | tee -a ${JOB_LOG}
   artifacts:
     access: "developer"
@@ -283,24 +293,18 @@ workflow:
   rules: !reference [.job_template, rules]
 
 .upload_template:
-  extends: [.repo_template, .api_mixin]
-  variables:
-    LOCAL_PACKAGE_ROOT: "${JOB_DEPS_ROOT}/${API_PACKAGE_NAME}"
-  before_script:
-    - !reference [.repo_template, before_script]
-    - mkdir -p ${LOCAL_PACKAGE_ROOT}
+  extends: [.job_template, .api_mixin]
+  image: {name: "${CONTAINER_IMAGE}"}
   after_script:
     - !reference [.api_anchors, api_upload]
-    - !reference [.repo_template, after_script]
-  rules: !reference [.repo_template, rules]
+    - !reference [.job_template, after_script]
+  rules: !reference [.job_template, rules]
 
 .download_template:
-  extends: [.repo_template, .api_mixin]
-  variables:
-    LOCAL_PACKAGE_ROOT: "${JOB_DEPS_ROOT}/${API_PACKAGE_NAME}"
+  extends: [.job_template, .api_mixin]
+  image: {name: "${CONTAINER_IMAGE}"}
   before_script:
-    - !reference [.repo_template, before_script]
-    - mkdir -p ${LOCAL_PACKAGE_ROOT}
+    - !reference [.job_template, before_script]
     - !reference [.api_anchors, api_download]
-  rules: !reference [.repo_template, rules]
+  rules: !reference [.job_template, rules]
 

@@ -1,4 +1,4 @@
-# Upstream Tools
+# upstream tools
 [submodule "axe"]
     path = axe
     url = https://github.com/black-parrot/axe.git
@@ -48,7 +48,7 @@
     ignore = dirty
     shallow = true
 
-# BlackParrot Tool Forks
+# BlackParrot forks
 [submodule "dromajo"]
     path = dromajo
     url = https://github.com/bsg-external/dromajo

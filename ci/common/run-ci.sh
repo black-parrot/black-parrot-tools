@@ -7,7 +7,7 @@ source $(dirname $0)/functions.sh
 bsg_log_init ${JOB_LOG} ${JOB_RPT} ${JOB_LOGLEVEL} || exit 1
 
 bsg_log_info "running ci"
-bsg_log_raw "with arguments: $@"
+bsg_log_raw "with arguments: $*"
 
 # Check if there are no arguments
 if [ "$#" -eq 0 ]; then

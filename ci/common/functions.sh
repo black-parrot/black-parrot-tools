@@ -11,6 +11,10 @@
 # enable automatic export
 set -o allexport
 
+# enable unofficial bash strict mode
+set -eo pipefail
+IFS=$'\n\t'
+
 ######################
 # global variables
 ######################
@@ -85,7 +89,7 @@ _bsg_log_level() {
 bsg_log_init() {
     _bsg_parse_args 3 logfile rptfile loglevel $@
 
-    printf "${_BSG_HDR_MIN} initializing logging...\n"
+    printf "${_BSG_HDR_RAW} initializing logging...\n"
     if [ "${_BSG_LOG_INIT}" -eq 1 ]; then
         printf "error: logging already initialized"
         return 1
