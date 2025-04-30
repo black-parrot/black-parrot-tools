@@ -4,9 +4,6 @@
 source $(dirname $0)/common/functions.sh
 bsg_log_info "starting $(basename $0)"
 
-# fail on any error
-set -e
-
 # check for binaries in path
 bsg_check_var "BP_INSTALL_DIR"
 bsg_log_info "setting installation directory as ${BP_INSTALL_DIR}"

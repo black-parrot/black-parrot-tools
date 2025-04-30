@@ -20,47 +20,48 @@ NUMPROC := $(shell grep -c ^processor /proc/cpuinfo)
 ##########################################################
 ## basic tools
 ##########################################################
-AUTOCONF  ?= autoconf
-AWK       ?= awk
-BASENAME  ?= basename
-CAT       ?= cat
-CMAKE     ?= $(if $(shell which cmake3),cmake3,cmake)
-CD        ?= cd
-CP        ?= cp
-CURL      ?= curl
-CUT       ?= cut
-DIFF      ?= diff
-DOCKER    ?= docker
-ECHO      ?= echo
-ENVSUBST  ?= envsubst
-EXIT      ?= exit
-FILE      ?= file
-FIND      ?= find
-GCC       ?= gcc
-GIT       ?= git
-GIT_APPLY ?= $(GIT) apply --ignore-whitespace --ignore-space-change
-GIT_CHECK ?= $(GIT_APPLY) --check --reverse
-GREP      ?= grep
-MKDIR     ?= mkdir
-MKDIRP    ?= mkdir -p
-MV        ?= mv
-PRINTF    ?= printf
-PYTHON    ?= $(if $(shell which python3),python3,python)
-RM        ?= rm
-RMRF      ?= rm -rf
-SED       ?= sed
-STTY      ?= stty
-STRIP     ?= strip
-SYMLINK   ?= ln -nsf
-TAIL      ?= tail
-TAR       ?= tar
-TEE       ?= tee
-TEST      ?= test
-TOUCH     ?= touch
-TR        ?= tr
-WCOUNT    ?= wc -l
-WGET      ?= wget
-XXD       ?= xxd
+AUTORECONF ?= autoreconf
+AUTOCONF   ?= autoconf
+AWK        ?= awk
+BASENAME   ?= basename
+CAT        ?= cat
+CMAKE      ?= $(if $(shell which cmake3),cmake3,cmake)
+CD         ?= cd
+CP         ?= cp
+CURL       ?= curl
+CUT        ?= cut
+DIFF       ?= diff
+DOCKER     ?= docker
+ECHO       ?= echo
+ENVSUBST   ?= envsubst
+EXIT       ?= exit
+FILE       ?= file
+FIND       ?= find
+GCC        ?= gcc
+GIT        ?= git
+GIT_APPLY  ?= $(GIT) apply --ignore-whitespace --ignore-space-change
+GIT_CHECK  ?= $(GIT_APPLY) --check --reverse
+GREP       ?= grep
+MKDIR      ?= mkdir
+MKDIRP     ?= mkdir -p
+MV         ?= mv
+PRINTF     ?= printf
+PYTHON     ?= $(if $(shell which python3),python3,python)
+RM         ?= rm
+RMRF       ?= rm -rf
+SED        ?= sed
+STTY       ?= stty
+STRIP      ?= strip
+SYMLINK    ?= ln -nsf
+TAIL       ?= tail
+TAR        ?= tar
+TEE        ?= tee
+TEST       ?= test
+TOUCH      ?= touch
+TR         ?= tr
+WCOUNT     ?= wc -l
+WGET       ?= wget
+XXD        ?= xxd
 
 #############################
 # variable templates
@@ -149,7 +150,7 @@ define bsg_fn_strip_binaries
 	$(FIND) $($@_install) -type f -exec sh -c '\
 		for file; do \
 			if $(FILE) "$$file" | $(GREP) -qE "ELF (.* )?(executable|shared)"; then \
-				$(STRIP) "$$file"; \
+				$(STRIP) "$$file" >/dev/null 2>&1 || true; \
 			fi; \
 	done \
 	' sh {} +
