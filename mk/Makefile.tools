@@ -19,7 +19,7 @@ $(eval $(call bsg_tgt_build_submodule,bsg_sv2v,$(BP_SV2V_DIR),$(BP_TOUCH_DIR),$(
 	@$(GIT) clone -b $(PYVERILOG_VER) $(PYVERILOG_URL) $(PYVERILOG_DIR)
 	@$(GIT) -C $(PYVERILOG_DIR) apply $</patches/pyverilog_add_wirelist_reglist.patch
 	@$(GIT) -C $(PYVERILOG_DIR) apply $</patches/pyverilog_sensitivity_comp.patch
-	@$(CD) $(@D); $(PYTHON) $(PYVERILOG_DIR)/setup.py install
+	@$(CD) $(PYVERILOG_DIR); $(PYTHON) setup.py install
 	@$(call bsg_fn_strip_binaries, $(BP_INSTALL_DIR))
 
 $(eval $(call bsg_tgt_build_submodule,dromajo,$(BP_DROMAJO_DIR),$(BP_TOUCH_DIR),$(BP_PATCH_DIR),$(BP_WORK_DIR)))
