@@ -55,8 +55,8 @@ variables:
   FF_USE_FASTZIP: "true"
   #FF_ENABLE_JOB_CLEANUP: "true"
   #FF_SET_PERMISSIONS_BEFORE_CLEANUP: "true"
-  ARTIFACT_COMPRESSION_LEVEL: "fastest"
-  CACHE_COMPRESSION_LEVEL: "fastest"
+  ARTIFACT_COMPRESSION_LEVEL: "slowest"
+  CACHE_COMPRESSION_LEVEL: "slowest"
   # Enable docker caching
   DOCKER_BUILDKIT: "1"
   DOCKER_DRIVER: "overlay2"
@@ -84,18 +84,18 @@ workflow:
     # helper
     FETCH_BASE_FLAGS: "--jobs=${CORES_PER_JOB} --prune --no-tags"
     UPDATE_BASE_FLAGS: "--jobs=${CORES_PER_JOB} --recommend-shallow"
-    REFERENCE_REPO: "${COMMONDIR}/${REPO_NAME}"
+    REFERENCE_REPO: "${COMMONDIR}/repos/${REPO_NAME}"
     # https://docs.gitlab.com/ci/runners/configure_runners/#handling-concurrency
     GIT_CLONE_PATH: "${CI_BUILDS_DIR}/${REPO_NAME}/${CI_PIPELINE_ID}/${JOB_NAME_SLUG}"
   git_prefetch: &git_prefetch_script
     - echo "[CI] configuring git to fetch with HTTP 1.1"
     - git config --global http.version HTTP/1.1
     - git config --global http.postBuffer 157286400
-    - echo "[CI] pre-fetching git repo from ${REFERENCE_REPO}"
     - |
       if [ -d ${GIT_CLONE_PATH} ]; then
         echo "[CI] git repo found at ${GIT_CLONE_PATH}"
       else
+        echo "[CI] cloning from reference ${REFERENCE_REPO}"
         git clone --no-checkout --reference=${REFERENCE_REPO} ${REPOSITORY_URL} ${GIT_CLONE_PATH}
       fi
     - echo "[CI] pre-fetching submodules from ${REFERENCE_REPO}"
@@ -112,30 +112,33 @@ workflow:
     API_WILDCARD: "setme"
     # generated variables
     API_WORK_ROOT: "${JOB_WORK_ROOT}/${API_PACKAGE_NAME}"
+    API_UPLOAD_ROOT: "${JOB_WORK_ROOT}/upload/${API_PACKAGE_NAME}"
+    API_DOWNLOAD_ROOT: "${JOB_WORK_ROOT}/download/${API_PACKAGE_NAME}"
     API_PACKAGE_TGZ: "${API_PACKAGE_NAME}.tar.gz"
     API_PROJECT_URL: "${API_V4_URL}/projects/${PROJECT_ID}"
     API_PACKAGE_URL: "${API_PROJECT_URL}/packages/generic/${API_PACKAGE_NAME}"
     API_CURL_URL: "${API_PACKAGE_URL}/${API_PACKAGE_VER}/${API_PACKAGE_TGZ}"
   api_upload: &api_upload_script
     - echo "[CI] gathering inputs for ${API_PACKAGE_NAME}" | tee -a ${JOB_LOG}
-    - mkdir -p ${API_WORK_ROOT}
-    - find ${JOB_DEPS_ROOT} -maxdepth 1 -type d -name ${API_WILDCARD}
-        -exec rsync --remove-source-files -a {}/ ${JOB_WORK_ROOT}/${API_PACKAGE_NAME} \;
+    - mkdir -p ${API_UPLOAD_ROOT}
+    - echo "[CI] publishing to url ${API_CURL_URL}" | tee -a ${JOB_LOG}
+    - find ${JOB_SUCCESS_ROOT} -maxdepth 1 -type d -name ${API_WILDCARD}
+        -exec rsync --remove-source-files -a {}/ ${API_UPLOAD_ROOT} \;
     - echo "[CI] uploading to ${API_CURL_URL}"
     - >
-      tar --totals --warning=no-file-changed -C ${JOB_WORK_ROOT} -czf - ${API_PACKAGE_NAME}
+      tar --totals --warning=no-file-changed -C $(dirname ${API_UPLOAD_ROOT}) -czf - $(basename ${API_UPLOAD_ROOT})
       | curl --location --header "JOB-TOKEN: ${JOB_TOKEN}" --upload-file - ${API_CURL_URL}
           >> ${JOB_LOG} 2>&1
   api_download: &api_download_script
     - echo "[CI] downloading from ${API_CURL_URL}"
-    - mkdir -p ${API_WORK_ROOT}
+    - mkdir -p ${API_DOWNLOAD_ROOT}
     - >
       curl --location --header "JOB-TOKEN: ${JOB_TOKEN}" ${API_CURL_URL}
-      | tar --totals --warning=no-file-changed -xzf - -C ${API_WORK_ROOT} --strip-components=1
+      | tar --totals --warning=no-file-changed -xzf - -C ${API_DOWNLOAD_ROOT} --strip-components=1
           >> ${JOB_LOG} 2>&1
     - echo "[CI] scattering inputs for ${API_PACKAGE_NAME}" | tee -a ${JOB_LOG}
-    - find ${JOB_WORK_ROOT} -maxdepth 1 -type d -name ${API_WILDCARD}
-        -exec rsync --remove-source-files -a {}/ ${JOB_SUCCESS_ROOT}/${API_PACKAGE_NAME}/ \;
+    - find ${API_DOWNLOAD_ROOT} -maxdepth 1 -type d -name ${API_WILDCARD}
+        -exec rsync --remove-source-files -a {}/ ${JOB_DEPS_ROOT}/${API_PACKAGE_NAME} \;
 
 ###################################################
 ## Mixins
@@ -202,8 +205,10 @@ workflow:
     # working directories
     JOB_WORK_ROOT: "work"
     JOB_DEPS_ROOT: "deps"
+    JOB_COMMON_ROOT: "${COMMONDIR}/${REPO_NAME}/${CI_PIPELINE_ID}"
     # don't touch variables
     JOB_LOG: "${JOB_LOG_ROOT}/${JOB_NAME_SLUG}.log"
+    JOB_OUT: "${JOB_LOG_ROOT}/${JOB_NAME_SLUG}.out"
     JOB_RPT: "${JOB_RPT_ROOT}/${JOB_NAME_SLUG}.rpt"
     DOTENV: "build.env"
   tags: [bsg] # use bsg machines by default
@@ -218,7 +223,7 @@ workflow:
     - |
       for d in "${JOB_LOG_ROOT} ${JOB_RPT_ROOT}" \
                "${JOB_WORK_ROOT} ${JOB_DEPS_ROOT}" \
-               "${JOB_SUCCESS_ROOT} ${JOB_FAILURE_ROOT} ${JOB_DEPS_ROOT}"; do
+               "${JOB_SUCCESS_ROOT} ${JOB_FAILURE_ROOT} ${JOB_DEPS_ROOT} ${JOB_COMMON_ROOT}"; do
         mkdir -p $d
         touch $d/.keep
       done

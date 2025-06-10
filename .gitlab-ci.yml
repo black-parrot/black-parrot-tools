@@ -69,6 +69,7 @@ include: '.gitlab-ci.common.yml'
     API_PACKAGE_VER: "${COMMIT_REF_SLUG}"
   script:
     - echo "[CI] publishing to url ${API_CURL_URL}" | tee -a ${JOB_LOG}
+    - mv ${JOB_DEPS_ROOT}/${TOOLS_WILDCARD} ${JOB_SUCCESS_ROOT}/
   rules: !reference [.upload_template, rules]
 
 .gather_job:
@@ -80,6 +81,7 @@ include: '.gitlab-ci.common.yml'
     API_PACKAGE_VER: "${COMMIT_REF_SLUG}"
   script:
     - echo "[CI] downloaded from url ${API_CURL_URL}" | tee -a ${JOB_LOG}
+    - mv ${JOB_DEPS_ROOT}/${TOOLS_PACKAGE} ${JOB_COMMON_ROOT}/$(basename ${BP_INSTALL_DIR})
   rules: !reference [.download_template, rules]
 
 .smoke_job:
@@ -87,9 +89,8 @@ include: '.gitlab-ci.common.yml'
   variables:
     TOOL: "setme"
   script:
+    - ln -nsf ${JOB_COMMON_ROOT}/$(basename ${BP_INSTALL_DIR}) ${BP_INSTALL_DIR}
     - SMOKE_SCRIPT="./ci/smoke-${TOOL}.sh"
-    - echo "[CI] moving package to installation directory" | tee -a ${JOB_LOG}
-    - mv ${JOB_DEPS_ROOT}/${TOOLS_PACKAGE} ${BP_INSTALL_DIR} >> ${JOB_LOG} 2>&1
     - echo "[CI] running script for ${SMOKE_SCRIPT}" | tee -a ${JOB_LOG}
     - ./ci/common/run-ci.sh ${SMOKE_SCRIPT}
   rules: !reference [.repo_template, rules]
@@ -146,6 +147,8 @@ smoke-tools:
   extends: [.smoke_job]
   parallel:
     matrix:
+      - DOCKER_PLATFORM: ["centos7", "ubuntu24.04"]
+        TOOL: ["verilator"]
       - DOCKER_PLATFORM: ["centos7", "ubuntu24.04"]
         TOOL: ["verilator", "dromajo"]
       - DOCKER_PLATFORM: ["centos7", "ubuntu24.04"]
