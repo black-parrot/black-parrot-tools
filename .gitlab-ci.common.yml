@@ -2,12 +2,13 @@
 # https://docs.gitlab.com/ci/variables/predefined_variables/
 variables:
   #########################################
-  # Required Project Variables
+  # required project variables
   #########################################
   REPO_NAME: "setme"
+  DOCKER_PLATFORM: "setme"
   CONTAINER_IMAGE: "setme"
   #########################################
-  # Required BSG Variables
+  # required bsg variables
   #########################################
   USER_NAME: "${BSG_CI_USER_NAME}"
   USER_ID: "${BSG_CI_USER_ID}"
@@ -17,7 +18,7 @@ variables:
   CORES_PER_JOB: "${BSG_CI_CORES_PER_JOB}"
   JOB_LOGLEVEL: "${BSG_CI_LOG_LEVEL}"
   #########################################
-  # Runner mounted locations
+  # runner mounted locations
   #########################################
   WORKDIR: "${BSG_CI_WORKDIR}"
   CACHEDIR: "${BSG_CI_CACHEDIR}"
@@ -25,7 +26,7 @@ variables:
   COMMONDIR: "${BSG_CI_COMMONDIR}"
   CADDIR: "${BSG_CI_CADDIR}"
   #########################################
-  # GitLab Variables
+  # gitlab variables
   #########################################
   # Automatic; we save them as "documentation"
   BUILDS_DIR: "${CI_BUILDS_DIR}"
@@ -44,6 +45,9 @@ variables:
   API_V4_URL: "${CI_API_V4_URL}"
   PROJECT_DIR: "${CI_PROJECT_DIR}"
   CONCURRENT_ID: "${CI_CONCURRENT_PROJECT_ID}"
+  #########################################
+  # gitlab flags
+  #########################################
   # https://docs.gitlab.com/ci/runners/configure_runners/#ignore-errors-in-after_script
   AFTER_SCRIPT_IGNORE_ERRORS: false
   FF_ENABLE_BASH_EXIT_CODE_CHECK: true
@@ -55,8 +59,8 @@ variables:
   FF_USE_FASTZIP: "true"
   #FF_ENABLE_JOB_CLEANUP: "true"
   #FF_SET_PERMISSIONS_BEFORE_CLEANUP: "true"
-  ARTIFACT_COMPRESSION_LEVEL: "slowest"
-  CACHE_COMPRESSION_LEVEL: "slowest"
+  #ARTIFACT_COMPRESSION_LEVEL: "slowest"
+  #CACHE_COMPRESSION_LEVEL: "slowest"
   # Enable docker caching
   DOCKER_BUILDKIT: "1"
   DOCKER_DRIVER: "overlay2"
@@ -119,12 +123,8 @@ workflow:
     API_PACKAGE_URL: "${API_PROJECT_URL}/packages/generic/${API_PACKAGE_NAME}"
     API_CURL_URL: "${API_PACKAGE_URL}/${API_PACKAGE_VER}/${API_PACKAGE_TGZ}"
   api_upload: &api_upload_script
-    - echo "[CI] gathering inputs for ${API_PACKAGE_NAME}" | tee -a ${JOB_LOG}
-    - mkdir -p ${API_UPLOAD_ROOT}
-    - echo "[CI] publishing to url ${API_CURL_URL}" | tee -a ${JOB_LOG}
-    - find ${JOB_SUCCESS_ROOT} -maxdepth 1 -type d -name ${API_WILDCARD}
-        -exec rsync --remove-source-files -a {}/ ${API_UPLOAD_ROOT} \;
     - echo "[CI] uploading to ${API_CURL_URL}"
+    - mkdir -p ${API_UPLOAD_ROOT}
     - >
       tar --totals --warning=no-file-changed -C $(dirname ${API_UPLOAD_ROOT}) -czf - $(basename ${API_UPLOAD_ROOT})
       | curl --location --header "JOB-TOKEN: ${JOB_TOKEN}" --upload-file - ${API_CURL_URL}
@@ -136,9 +136,6 @@ workflow:
       curl --location --header "JOB-TOKEN: ${JOB_TOKEN}" ${API_CURL_URL}
       | tar --totals --warning=no-file-changed -xzf - -C ${API_DOWNLOAD_ROOT} --strip-components=1
           >> ${JOB_LOG} 2>&1
-    - echo "[CI] scattering inputs for ${API_PACKAGE_NAME}" | tee -a ${JOB_LOG}
-    - find ${API_DOWNLOAD_ROOT} -maxdepth 1 -type d -name ${API_WILDCARD}
-        -exec rsync --remove-source-files -a {}/ ${JOB_DEPS_ROOT}/${API_PACKAGE_NAME} \;
 
 ###################################################
 ## Mixins
@@ -198,14 +195,13 @@ workflow:
 .job_template:
   variables:
     # uploaded directories
-    JOB_LOG_ROOT: "logs"
-    JOB_RPT_ROOT: "reports"
-    JOB_SUCCESS_ROOT: "artifacts/success"
-    JOB_FAILURE_ROOT: "artifacts/failure"
+    JOB_LOG_ROOT: "logs/${DOCKER_PLATFORM}"
+    JOB_RPT_ROOT: "reports/${DOCKER_PLATFORM}"
+    JOB_SUCCESS_ROOT: "artifacts/success/${DOCKER_PLATFORM}"
+    JOB_FAILURE_ROOT: "artifacts/failure/${DOCKER_PLATFORM}"
     # working directories
     JOB_WORK_ROOT: "work"
     JOB_DEPS_ROOT: "deps"
-    JOB_COMMON_ROOT: "${COMMONDIR}/${REPO_NAME}/${CI_PIPELINE_ID}"
     # don't touch variables
     JOB_LOG: "${JOB_LOG_ROOT}/${JOB_NAME_SLUG}.log"
     JOB_OUT: "${JOB_LOG_ROOT}/${JOB_NAME_SLUG}.out"
@@ -223,7 +219,8 @@ workflow:
     - |
       for d in "${JOB_LOG_ROOT} ${JOB_RPT_ROOT}" \
                "${JOB_WORK_ROOT} ${JOB_DEPS_ROOT}" \
-               "${JOB_SUCCESS_ROOT} ${JOB_FAILURE_ROOT} ${JOB_DEPS_ROOT} ${JOB_COMMON_ROOT}"; do
+               "${JOB_SUCCESS_ROOT} ${JOB_FAILURE_ROOT}" \
+      ; do
         mkdir -p $d
         touch $d/.keep
       done
@@ -266,11 +263,12 @@ workflow:
   image: {name: docker:24.0.5}
   services: [docker:24.0.5-dind]
   variables:
+    DOCKERFILE_NEVER: ""
     DOCKERFILE_FORCE: ""
   before_script:
     - !reference [.job_template, before_script]
     - echo "[CI] logging into docker registry" | tee -a ${JOB_LOG}
-    - echo "${REGISTRY_PASSWORD}" | docker login ${REGISTRY} -u ${REGISTRY_USER} --password-stdin
+    - docker login -u ${REGISTRY_USER} -p ${REGISTRY_PASSWORD} ${REGISTRY}
     - echo "[CI] checking for previous docker image ${CONTAINER_IMAGE}" | tee -a ${JOB_LOG}
     - |
       if docker manifest inspect ${CONTAINER_IMAGE} > /dev/null 2>&1; then
@@ -281,13 +279,10 @@ workflow:
       fi
   after_script:
     - echo "[CI] logging into docker registry"  | tee -a ${JOB_LOG}
-    - echo "${REGISTRY_PASSWORD}" | docker login ${REGISTRY} -u ${REGISTRY_USER} --password-stdin
+    - docker login -u ${REGISTRY_USER} -p ${REGISTRY_PASSWORD} ${REGISTRY}
     - echo "[CI] publishing docker images"  | tee -a ${JOB_LOG}
     - docker push ${CONTAINER_IMAGE} >> ${JOB_LOG} 2>&1
     - !reference [.job_template, after_script]
-  rules:
-    - if: $DOCKERFILE_FORCE != ""
-      when: always
 
 .repo_template:
   extends: [.job_template, .fetch_mixin]
@@ -301,6 +296,10 @@ workflow:
   extends: [.job_template, .api_mixin]
   image: {name: "${CONTAINER_IMAGE}"}
   after_script:
+    - mkdir -p ${API_UPLOAD_ROOT}
+    - echo "[CI] gathering inputs for ${API_PACKAGE_NAME}" | tee -a ${JOB_LOG}
+    - find ${JOB_DEPS_ROOT} -maxdepth 1 -type d -name ${API_WILDCARD}
+        -exec rsync --remove-source-files -a {}/ ${API_UPLOAD_ROOT} \;
     - !reference [.api_anchors, api_upload]
     - !reference [.job_template, after_script]
   rules: !reference [.job_template, rules]
@@ -311,5 +310,9 @@ workflow:
   before_script:
     - !reference [.job_template, before_script]
     - !reference [.api_anchors, api_download]
+    - echo "[CI] scattering inputs for ${API_PACKAGE_NAME}" | tee -a ${JOB_LOG}
+    - mkdir -p ${API_DOWNLOAD_ROOT}
+    - find ${API_DOWNLOAD_ROOT} -maxdepth 1 -type d -name ${API_WILDCARD}
+        -exec rsync --remove-source-files -a {}/ ${JOB_DEPS_ROOT}/${API_PACKAGE_NAME} \;
   rules: !reference [.job_template, rules]
 

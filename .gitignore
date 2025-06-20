@@ -1,4 +1,5 @@
 install/
 work/
 bsg_cadenv/
+.gitlab-ci-local/
 *.swp

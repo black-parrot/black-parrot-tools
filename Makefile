@@ -5,7 +5,7 @@ include $(TOP)/Makefile.env
 include $(BP_MK_DIR)/Makefile.*
 
 tools_lite: ## minimal set of simulation tools
-tools_lite: checkout
+tools_lite:
 	@$(MAKE) build.verilator
 	@$(MAKE) build.dromajo
 

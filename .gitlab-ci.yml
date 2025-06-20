@@ -5,27 +5,37 @@ include: '.gitlab-ci.common.yml'
 ###################################################
 ## mixins
 ###################################################
-.bp_tools_mixin:
+.project_mixin:
   variables:
-    REPO_NAME: "black-parrot-tools"
     # template variables
+    REPO_NAME: "black-parrot-tools"
     DOCKER_PLATFORM: "setme"
     CONTAINER_IMAGE: "${REGISTRY_IMAGE}:${DOCKER_PLATFORM}"
     # used internally
+    TOOLS_ARTIFACT: "install-${TOOL}"
+    TOOLS_WILDCARD: "install-*"
     TOOLS_PACKAGE: "tools-${DOCKER_PLATFORM}"
-    TOOLS_INSTALL_TAG: "${TOOLS_PACKAGE}-install"
-    TOOLS_ARTIFACT: "${TOOLS_INSTALL_TAG}-${TOOL}"
-    TOOLS_WILDCARD: "${TOOLS_INSTALL_TAG}-*"
     # exported to make sure things go in the right place
     BP_WORK_DIR: "${PROJECT_DIR}/${JOB_WORK_ROOT}/bp-tools-work"
     BP_INSTALL_DIR: "${PROJECT_DIR}/${JOB_WORK_ROOT}/bp-tools-install"
+
+.project_anchors:
+  .all_platforms: &all_platforms
+    DOCKER_PLATFORM: ["centos7", "ubuntu24.04"]
+  .default_platform: &default_platform
+    DOCKER_PLATFORM: ["centos7"]
+  .init: &init_script
+    - echo "[CI] Initializing ${REPO_NAME}"
+    - JOB_COMMON_ROOT="${COMMONDIR}/${CI_PIPELINE_ID}/${DOCKER_PLATFORM}"
+    - mkdir -p ${JOB_COMMON_ROOT}
+    - COMMON_INSTALL_DIR="${JOB_COMMON_ROOT}/$(basename ${BP_INSTALL_DIR})"
 
 ###################################################
 ## templates
 ###################################################
 
 .image_job:
-  extends: [.docker_template, .bp_tools_mixin]
+  extends: [.docker_template, .project_mixin]
   script:
     - echo "[CI] building image ${CONTAINER_IMAGE}" | tee -a ${JOB_LOG}
     - docker build docker -f docker/Dockerfile.${DOCKER_PLATFORM}
@@ -35,9 +45,12 @@ include: '.gitlab-ci.common.yml'
         --build-arg GROUP_NAME="${GROUP_NAME}"
         --build-arg GROUP_ID="${GROUP_ID}"
         --build-arg OTHER_GROUPS="${OTHER_GROUPS}"
-        -t ${CONTAINER_IMAGE} >> ${JOB_LOG} 2>&1
+        -t ${CONTAINER_IMAGE} 2>&1
   rules:
-    - !reference [.docker_template, rules]
+    - if: $DOCKERFILE_FORCE
+      when: always
+    - if: $DOCKERFILE_NEVER
+      when: never
     - changes:
         paths:
           # variable expansion of DOCKER_PLATFORM doesn't seem to work here
@@ -46,10 +59,11 @@ include: '.gitlab-ci.common.yml'
           - docker/requirements.txt
 
 .build_job:
-  extends: [.repo_template, .bp_tools_mixin]
+  extends: [.repo_template, .project_mixin]
   variables:
     TOOL: "setme"
   script:
+    - !reference [.project_anchors, .init]
     - echo "[CI] doing makefile checkout" | tee -a ${JOB_LOG}
     - make -j${CORES_PER_JOB} checkout >> ${JOB_LOG} 2>&1
     - echo "[CI] repatching ${TOOL}" | tee -a ${JOB_LOG}
@@ -58,42 +72,41 @@ include: '.gitlab-ci.common.yml'
     - make -j${CORES_PER_JOB} rebuild.${TOOL} >> ${JOB_LOG} 2>&1
     - echo "[CI] moving installation directory to build output" | tee -a ${JOB_LOG}
     - mv ${BP_INSTALL_DIR} ${JOB_SUCCESS_ROOT}/${TOOLS_ARTIFACT}
-  rules: !reference [.repo_template, rules]
 
 .scatter_job:
-  extends: [.upload_template, .bp_tools_mixin]
+  extends: [.upload_template, .project_mixin]
   variables:
     # template variables
     API_WILDCARD: "${TOOLS_WILDCARD}"
     API_PACKAGE_NAME: "${TOOLS_PACKAGE}"
     API_PACKAGE_VER: "${COMMIT_REF_SLUG}"
   script:
-    - echo "[CI] publishing to url ${API_CURL_URL}" | tee -a ${JOB_LOG}
-    - mv ${JOB_DEPS_ROOT}/${TOOLS_WILDCARD} ${JOB_SUCCESS_ROOT}/
-  rules: !reference [.upload_template, rules]
+    - !reference [.project_anchors, .init]
+    - echo "[CI] scattering tools" | tee -a ${JOB_LOG}
 
 .gather_job:
-  extends: [.download_template, .bp_tools_mixin]
+  extends: [.download_template, .project_mixin]
   variables:
     # template variables
     API_WILDCARD: "${TOOLS_PACKAGE}"
     API_PACKAGE_NAME: "${TOOLS_PACKAGE}"
     API_PACKAGE_VER: "${COMMIT_REF_SLUG}"
   script:
-    - echo "[CI] downloaded from url ${API_CURL_URL}" | tee -a ${JOB_LOG}
-    - mv ${JOB_DEPS_ROOT}/${TOOLS_PACKAGE} ${JOB_COMMON_ROOT}/$(basename ${BP_INSTALL_DIR})
-  rules: !reference [.download_template, rules]
+    - !reference [.project_anchors, .init]
+    - echo "[CI] gathering tools" | tee -a ${JOB_LOG}
+    - mv ${JOB_DEPS_ROOT}/${API_PACKAGE_NAME} ${COMMON_INSTALL_DIR}
 
 .smoke_job:
-  extends: [.repo_template, .bp_tools_mixin]
+  extends: [.repo_template, .project_mixin]
   variables:
     TOOL: "setme"
+    RUN_SCRIPT: "./ci/common/run-ci.sh"
+    SMOKE_SCRIPT: "./ci/smoke-${TOOL}.sh"
   script:
-    - ln -nsf ${JOB_COMMON_ROOT}/$(basename ${BP_INSTALL_DIR}) ${BP_INSTALL_DIR}
-    - SMOKE_SCRIPT="./ci/smoke-${TOOL}.sh"
+    - !reference [.project_anchors, .init]
     - echo "[CI] running script for ${SMOKE_SCRIPT}" | tee -a ${JOB_LOG}
-    - ./ci/common/run-ci.sh ${SMOKE_SCRIPT}
-  rules: !reference [.repo_template, rules]
+    - ln -nsf ${COMMON_INSTALL_DIR} ${BP_INSTALL_DIR}
+    - ${RUN_SCRIPT} ${SMOKE_SCRIPT}
 
 ###################################################
 ## Actual Jobs
@@ -106,53 +119,46 @@ include: '.gitlab-ci.common.yml'
 #    matrix:
 #      - DOCKER_PLATFORM: $DOCKER_PLATFORM
 
-image-tools:
+build-image:
   extends: [.image_job]
   parallel:
     matrix:
-      - DOCKER_PLATFORM: ["centos7", "ubuntu24.04"]
+      - <<: *all_platforms
   needs: []
-  rules: !reference [.image_job, rules]
 
 build-tools:
   extends: [.build_job]
   parallel:
     matrix:
-      - DOCKER_PLATFORM: ["centos7", "ubuntu24.04"]
+      - <<: *all_platforms
         TOOL: ["verilator", "dromajo"]
-      - DOCKER_PLATFORM: ["centos7", "ubuntu24.04"]
+      - <<: *all_platforms
         TOOL: ["spike", "surelog", "yosys", "axe"]
-      - DOCKER_PLATFORM: ["centos7", "ubuntu24.04"]
+      - <<: *all_platforms
         TOOL: ["yslang", "bsg_sv2v", "bsg_fakeram"]
-  needs: [{job: image-docker, optional: true}]
-  rules: !reference [.build_job, rules]
+  needs: [{job: build-image, optional: true}]
 
 scatter-tools:
   extends: [.scatter_job]
   parallel:
     matrix:
-      - DOCKER_PLATFORM: ["centos7", "ubuntu24.04"]
+      - <<: *all_platforms
   needs: [{job: build-tools}]
-  rules: !reference [.scatter_job, rules]
 
 gather-tools:
   extends: [.gather_job]
   parallel:
     matrix:
-      - DOCKER_PLATFORM: ["centos7", "ubuntu24.04"]
+      - <<: *all_platforms
   needs: [{job: scatter-tools, optional: true}]
-  rules: !reference [.gather_job, rules]
 
 smoke-tools:
   extends: [.smoke_job]
   parallel:
     matrix:
-      - DOCKER_PLATFORM: ["centos7", "ubuntu24.04"]
-        TOOL: ["verilator"]
-      - DOCKER_PLATFORM: ["centos7", "ubuntu24.04"]
+      - <<: *all_platforms
         TOOL: ["verilator", "dromajo"]
-      - DOCKER_PLATFORM: ["centos7", "ubuntu24.04"]
+      - <<: *all_platforms
         TOOL: ["spike", "surelog", "yosys", "axe"]
   needs: [{job: gather-tools}]
-  rules: !reference [.smoke_job, rules]
 
