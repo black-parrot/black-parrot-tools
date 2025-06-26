@@ -29,13 +29,8 @@ variables:
   # gitlab variables
   #########################################
   # Automatic; we save them as "documentation"
-  BUILDS_DIR: "${CI_BUILDS_DIR}"
-  COMMIT_REF_SLUG: "${CI_COMMIT_REF_SLUG}"
-  REPOSITORY_URL: "${CI_REPOSITORY_URL}"
-  COMMIT_SHA: "${CI_COMMIT_SHA}"
   JOB_NAME_SLUG: "${CI_JOB_NAME_SLUG}"
-  PIPELINE_ID: "${CI_PIPELINE_ID}"
-  PROJECT_NAME: "${CI_PROJECT_NAME}"
+  COMMIT_REF_SLUG: "${CI_COMMIT_REF_SLUG}"
   REGISTRY: "${CI_REGISTRY}"
   REGISTRY_USER: "${CI_REGISTRY_USER}"
   REGISTRY_IMAGE: "${CI_REGISTRY_IMAGE}"
@@ -43,8 +38,6 @@ variables:
   JOB_TOKEN: "${CI_JOB_TOKEN}"
   PROJECT_ID: "${CI_PROJECT_ID}"
   API_V4_URL: "${CI_API_V4_URL}"
-  PROJECT_DIR: "${CI_PROJECT_DIR}"
-  CONCURRENT_ID: "${CI_CONCURRENT_PROJECT_ID}"
   #########################################
   # gitlab flags
   #########################################
@@ -75,7 +68,7 @@ workflow:
     on_new_commit: interruptible
     on_job_failure: all
   rules:
-    - if: $CI_COMMIT_BRANCH =~ "/^ci_.*$|master/"
+    - if: $CI_COMMIT_BRANCH =~ "/^ci_.*$|master|main/"
 
 ###################################################
 ## Anchors
@@ -84,29 +77,15 @@ workflow:
 .git_anchors:
   variables: &git_variables
     # builtin
-    GET_SOURCES_ATTEMPTS: 3
+    GET_SOURCES_ATTEMPTS: 1
     # helper
     FETCH_BASE_FLAGS: "--jobs=${CORES_PER_JOB} --prune --no-tags"
     UPDATE_BASE_FLAGS: "--jobs=${CORES_PER_JOB} --recommend-shallow"
-    REFERENCE_REPO: "${COMMONDIR}/repos/${REPO_NAME}"
-    # https://docs.gitlab.com/ci/runners/configure_runners/#handling-concurrency
-    GIT_CLONE_PATH: "${CI_BUILDS_DIR}/${REPO_NAME}/${CI_PIPELINE_ID}/${JOB_NAME_SLUG}"
-  git_prefetch: &git_prefetch_script
-    - echo "[CI] configuring git to fetch with HTTP 1.1"
-    - git config --global http.version HTTP/1.1
-    - git config --global http.postBuffer 157286400
-    - |
-      if [ -d ${GIT_CLONE_PATH} ]; then
-        echo "[CI] git repo found at ${GIT_CLONE_PATH}"
-      else
-        echo "[CI] cloning from reference ${REFERENCE_REPO}"
-        git clone --no-checkout --reference=${REFERENCE_REPO} ${REPOSITORY_URL} ${GIT_CLONE_PATH}
-      fi
-    - echo "[CI] pre-fetching submodules from ${REFERENCE_REPO}"
-    - git -C ${GIT_CLONE_PATH} submodule update --init --reference=${REFERENCE_REPO}
-  git_cleanup: &git_cleanup_script
-    - echo "[CI] cleaning up the submodules"
-    - git submodule deinit --force --all
+    GIT_CLONE_PATH: "${CI_BUILDS_DIR}/${CI_CONCURRENT_PROJECT_ID}/${CI_PROJECT_PATH}"
+    GIT_CLEAN_FLAGS: "none"
+    GIT_SUBMODULE_STRATEGY: "none"
+    GIT_SUBMODULE_UPDATE_FLAGS: "none"
+    GIT_SUBMODULE_DEPTH: "1"
 
 # https://docs.gitlab.com/user/packages/package_registry/
 .api_anchors:
@@ -114,12 +93,13 @@ workflow:
     API_PACKAGE_NAME: "setme"
     API_PACKAGE_VER: "setme"
     API_WILDCARD: "setme"
+    API_PROJECT_ID: "${PROJECT_ID}"
     # generated variables
     API_WORK_ROOT: "${JOB_WORK_ROOT}/${API_PACKAGE_NAME}"
     API_UPLOAD_ROOT: "${JOB_WORK_ROOT}/upload/${API_PACKAGE_NAME}"
     API_DOWNLOAD_ROOT: "${JOB_WORK_ROOT}/download/${API_PACKAGE_NAME}"
     API_PACKAGE_TGZ: "${API_PACKAGE_NAME}.tar.gz"
-    API_PROJECT_URL: "${API_V4_URL}/projects/${PROJECT_ID}"
+    API_PROJECT_URL: "${API_V4_URL}/projects/${API_PROJECT_ID}"
     API_PACKAGE_URL: "${API_PROJECT_URL}/packages/generic/${API_PACKAGE_NAME}"
     API_CURL_URL: "${API_PACKAGE_URL}/${API_PACKAGE_VER}/${API_PACKAGE_TGZ}"
   api_upload: &api_upload_script
@@ -145,19 +125,6 @@ workflow:
   variables:
     <<: *git_variables
 
-.bare_mixin:
-  extends: [.git_mixin]
-  variables:
-    # builtin
-    GIT_STRATEGY: "none"
-    GIT_DEPTH: ""
-    GIT_FETCH_EXTRA_FLAGS: "none"
-    GIT_CHECKOUT: "false"
-    GIT_CLEAN_FLAGS: "none"
-    GIT_SUBMODULE_STRATEGY: "none"
-    GIT_SUBMODULE_UPDATE_FLAGS: "none"
-    GIT_SUBMODULE_DEPTH: ""
-
 .clone_mixin:
   extends: [.git_mixin]
   variables:
@@ -166,10 +133,6 @@ workflow:
     GIT_DEPTH: "5"
     GIT_FETCH_EXTRA_FLAGS: "${FETCH_BASE_FLAGS}"
     GIT_CHECKOUT: "true"
-    GIT_CLEAN_FLAGS: "none"
-    GIT_SUBMODULE_STRATEGY: "none"
-    GIT_SUBMODULE_UPDATE_FLAGS: "none"
-    GIT_SUBMODULE_DEPTH: ""
 
 .fetch_mixin:
   extends: [.git_mixin]
@@ -179,10 +142,15 @@ workflow:
     GIT_DEPTH: "5"
     GIT_FETCH_EXTRA_FLAGS: "${FETCH_BASE_FLAGS}"
     GIT_CHECKOUT: "true"
-    GIT_CLEAN_FLAGS: "none"
-    GIT_SUBMODULE_STRATEGY: "normal"
-    GIT_SUBMODULE_UPDATE_FLAGS: "${UPDATE_BASE_FLAGS}"
-    GIT_SUBMODULE_DEPTH: "3"
+
+.bare_mixin:
+  extends: [.git_mixin]
+  variables:
+    # builtin
+    GIT_STRATEGY: "none"
+    GIT_DEPTH: "1"
+    GIT_FETCH_EXTRA_FLAGS: "none"
+    GIT_CHECKOUT: "false"
 
 .api_mixin:
   extends: [.bare_mixin]
@@ -210,9 +178,8 @@ workflow:
   tags: [bsg] # use bsg machines by default
   interruptible: true
   before_script:
-    - echo "[CI] job ${PROJECT_DIR} at ${GIT_CLONE_PATH}"
     - echo "[CI] cleaning up from previous job"
-    - rm -rf ${JOB_FAILURE_ROOT}/* ${JOB_LOG_ROOT}/* ${JOB_RPT_ROOT}/*
+    - rm -rf ${JOB_FAILURE_ROOT}/* ${JOB_LOG_ROOT}/* ${JOB_RPT_ROOT}/* ${JOB_DEPS_ROOT}/*
     - echo "[CI] initializing DOTENV"
     - echo "DOTENV_TESTVAR=dotenv_testvar" | tee -a ${GITLAB_ENV} >> ${DOTENV}
     - echo "[CI] initializing job directories"
@@ -262,9 +229,6 @@ workflow:
   tags: [saas-linux-small-amd64] # use shared gitlab runner for dind
   image: {name: docker:24.0.5}
   services: [docker:24.0.5-dind]
-  variables:
-    DOCKERFILE_NEVER: ""
-    DOCKERFILE_FORCE: ""
   before_script:
     - !reference [.job_template, before_script]
     - echo "[CI] logging into docker registry" | tee -a ${JOB_LOG}
@@ -289,8 +253,11 @@ workflow:
   image: {name: "${CONTAINER_IMAGE}"}
   # https://gitlab.com/gitlab-org/gitlab-runner/-/issues/1736#note_107983504
   variables: {FF_DISABLE_UMASK_FOR_DOCKER_EXECUTOR: "true"}
-  hooks: {pre_get_sources_script: !reference [.git_anchors, git_prefetch]}
-  rules: !reference [.job_template, rules]
+  hooks:
+    pre_get_sources_script:
+      - echo "[CI] configuring git to fetch with HTTP 1.1"
+      - git config --global http.version HTTP/1.1
+      - git config --global http.postBuffer 157286400
 
 .upload_template:
   extends: [.job_template, .api_mixin]
@@ -302,7 +269,6 @@ workflow:
         -exec rsync --remove-source-files -a {}/ ${API_UPLOAD_ROOT} \;
     - !reference [.api_anchors, api_upload]
     - !reference [.job_template, after_script]
-  rules: !reference [.job_template, rules]
 
 .download_template:
   extends: [.job_template, .api_mixin]
@@ -314,5 +280,4 @@ workflow:
     - mkdir -p ${API_DOWNLOAD_ROOT}
     - find ${API_DOWNLOAD_ROOT} -maxdepth 1 -type d -name ${API_WILDCARD}
         -exec rsync --remove-source-files -a {}/ ${JOB_DEPS_ROOT}/${API_PACKAGE_NAME} \;
-  rules: !reference [.job_template, rules]
 

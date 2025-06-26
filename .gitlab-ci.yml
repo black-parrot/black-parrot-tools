@@ -24,9 +24,9 @@ include: '.gitlab-ci.common.yml'
     DOCKER_PLATFORM: ["centos7", "ubuntu24.04"]
   .default_platform: &default_platform
     DOCKER_PLATFORM: ["centos7"]
-  .init: &init_script
+  init: &init_script
     - echo "[CI] Initializing ${REPO_NAME}"
-    - JOB_COMMON_ROOT="${COMMONDIR}/${CI_PIPELINE_ID}/${DOCKER_PLATFORM}"
+    - JOB_COMMON_ROOT="${COMMONDIR}/${REPO_NAME}/${CI_PIPELINE_ID}/${DOCKER_PLATFORM}"
     - mkdir -p ${JOB_COMMON_ROOT}
     - COMMON_INSTALL_DIR="${JOB_COMMON_ROOT}/$(basename ${BP_INSTALL_DIR})"
 
@@ -45,7 +45,7 @@ include: '.gitlab-ci.common.yml'
         --build-arg GROUP_NAME="${GROUP_NAME}"
         --build-arg GROUP_ID="${GROUP_ID}"
         --build-arg OTHER_GROUPS="${OTHER_GROUPS}"
-        -t ${CONTAINER_IMAGE} 2>&1
+        -t ${CONTAINER_IMAGE}
   rules:
     - if: $DOCKERFILE_FORCE
       when: always
@@ -63,12 +63,12 @@ include: '.gitlab-ci.common.yml'
   variables:
     TOOL: "setme"
   script:
-    - !reference [.project_anchors, .init]
-    - echo "[CI] doing makefile checkout" | tee -a ${JOB_LOG}
-    - make -j${CORES_PER_JOB} checkout >> ${JOB_LOG} 2>&1
-    - echo "[CI] repatching ${TOOL}" | tee -a ${JOB_LOG}
+    - !reference [.project_anchors, init]
+    - echo "[CI] doing makefile checkout"
+    - make -j${CORES_PER_JOB} checkout | tee -a ${JOB_LOG}
+    - echo "[CI] patching ${TOOL}" | tee -a ${JOB_LOG}
     - make -j${CORES_PER_JOB} repatch.${TOOL} >> ${JOB_LOG} 2>&1
-    - echo "[CI] rebuilding ${TOOL}" | tee -a ${JOB_LOG}
+    - echo "[CI] building ${TOOL}" | tee -a ${JOB_LOG}
     - make -j${CORES_PER_JOB} rebuild.${TOOL} >> ${JOB_LOG} 2>&1
     - echo "[CI] moving installation directory to build output" | tee -a ${JOB_LOG}
     - mv ${BP_INSTALL_DIR} ${JOB_SUCCESS_ROOT}/${TOOLS_ARTIFACT}
@@ -81,7 +81,7 @@ include: '.gitlab-ci.common.yml'
     API_PACKAGE_NAME: "${TOOLS_PACKAGE}"
     API_PACKAGE_VER: "${COMMIT_REF_SLUG}"
   script:
-    - !reference [.project_anchors, .init]
+    - !reference [.project_anchors, init]
     - echo "[CI] scattering tools" | tee -a ${JOB_LOG}
 
 .gather_job:
@@ -92,7 +92,7 @@ include: '.gitlab-ci.common.yml'
     API_PACKAGE_NAME: "${TOOLS_PACKAGE}"
     API_PACKAGE_VER: "${COMMIT_REF_SLUG}"
   script:
-    - !reference [.project_anchors, .init]
+    - !reference [.project_anchors, init]
     - echo "[CI] gathering tools" | tee -a ${JOB_LOG}
     - mv ${JOB_DEPS_ROOT}/${API_PACKAGE_NAME} ${COMMON_INSTALL_DIR}
 
@@ -103,7 +103,7 @@ include: '.gitlab-ci.common.yml'
     RUN_SCRIPT: "./ci/common/run-ci.sh"
     SMOKE_SCRIPT: "./ci/smoke-${TOOL}.sh"
   script:
-    - !reference [.project_anchors, .init]
+    - !reference [.project_anchors, init]
     - echo "[CI] running script for ${SMOKE_SCRIPT}" | tee -a ${JOB_LOG}
     - ln -nsf ${COMMON_INSTALL_DIR} ${BP_INSTALL_DIR}
     - ${RUN_SCRIPT} ${SMOKE_SCRIPT}

@@ -58,8 +58,8 @@ Files marked with [x] are not often interesting to users while files marked with
         |---ci
            |---common
               |---run-ci.sh                 # [r] wrapper script to run ci script on GitLab
-              |---run-local.sh              # [r] wrapper script to run ci script locally
               |---functions.sh              # [x] helper functions for bash scripts
+           |---run-local.sh            # [w] wrapper script to run ci script locally
            |---functions.sh            # [w] helper functions for this repo
            |---smoke-verilator.sh      # [w] test that verilator is installed correctly
            |---smoke-yosys.sh          # [w] test that yosys is installed correctly
