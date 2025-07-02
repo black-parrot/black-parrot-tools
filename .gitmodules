@@ -4,49 +4,41 @@
     url = https://github.com/black-parrot/axe.git
     branch = master
     ignore = dirty
-    shallow = true
 [submodule "bsg_sv2v"]
     path = bsg_sv2v
     url = https://github.com/bespoke-silicon-group/bsg_sv2v
     branch = master
     ignore = dirty
-    shallow = true
 [submodule "Surelog"]
     path = Surelog
     url = https://github.com/chipsalliance/Surelog
     branch = master
     ignore = dirty
-    shallow = true
 [submodule "verilator"]
     path = verilator
     url = https://github.com/verilator/verilator
     branch = master
     ignore = dirty
-    shallow = true
 [submodule "yosys"]
     path = yosys
     url = https://github.com/YosysHQ/yosys.git
     branch = master
     ignore = dirty
-    shallow = true
 [submodule "bsg_fakeram"]
     path = bsg_fakeram
     url = https://github.com/bespoke-silicon-group/bsg_fakeram
     branch = master
     ignore = dirty
-    shallow = true
 [submodule "riscv-isa-sim"]
     path = riscv-isa-sim
     url = https://github.com/riscv-software-src/riscv-isa-sim.git
     branch = master
     ignore = dirty
-    shallow = true
 [submodule "yosys-slang"]
     path = yosys-slang
     url = https://github.com/povik/yosys-slang.git
     branch = master
     ignore = dirty
-    shallow = true
 
 # BlackParrot forks
 [submodule "dromajo"]
@@ -54,5 +46,4 @@
     url = https://github.com/bsg-external/dromajo
     branch = blackparrot_mods_1208
     ignore = dirty
-    shallow = true
 
