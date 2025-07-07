@@ -124,6 +124,9 @@ bsg_log_init() {
     printf "rptfile: ${_BSG_RPT_FILE}\n"
     printf "outfile: ${_BSG_OUT_FILE}\n"
 
+    mkdir -p $(dirname ${_BSG_LOG_FILE}) $(dirname ${_BSG_RPT_FILE}) $(dirname ${_BSG_OUT_FILE})
+    touch ${_BSG_LOG_FILE} ${_BSG_RPT_FILE} ${_BSG_OUT_FILE}
+
     _BSG_LOG_INIT=1
 }
 

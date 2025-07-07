@@ -1,4 +1,9 @@
 
+spec:
+  inputs:
+    do_clean_run:
+---
+
 ###################################################
 ## anchors
 ###################################################
@@ -19,22 +24,20 @@
     GIT_CONFIG_VALUE_0: "*"
     # Performance flags https://docs.gitlab.com/runner/configuration/feature-flags/
     FF_USE_FASTZIP: "true"
-    #FF_ENABLE_JOB_CLEANUP: "true"
-    #FF_SET_PERMISSIONS_BEFORE_CLEANUP: "true"
-    #ARTIFACT_COMPRESSION_LEVEL: "slowest"
-    #CACHE_COMPRESSION_LEVEL: "slowest"
+    FF_ENABLE_JOB_CLEANUP: "true"
+    FF_SET_PERMISSIONS_BEFORE_CLEANUP: "true"
+    ARTIFACT_COMPRESSION_LEVEL: "slowest"
+    CACHE_COMPRESSION_LEVEL: "slowest"
     # https://gitlab.com/gitlab-org/gitlab-runner/-/issues/1736#note_107983504
     FF_DISABLE_UMASK_FOR_DOCKER_EXECUTOR: "true"
+    FF_LOG_IMAGES_CONFIGURED_FOR_JOB: "true"
+    FF_SCRIPT_SECTIONS: "true"
 
 .docker_anchors:
   variables: &docker_variables
-    # template
-    DOCKER_PLATFORM: "setme"
     # Enable docker caching
     DOCKER_BUILDKIT: "1"
     DOCKER_DRIVER: "overlay2"
-    # generated
-    CONTAINER_IMAGE: "$CI_REGISTRY_IMAGE:$DOCKER_PLATFORM"
   docker_prefetch: &docker_prefetch_script
     - echo "[CI] logging into docker registry"
     - docker login -u ${CI_REGISTRY_USER} -p ${CI_REGISTRY_PASSWORD} ${CI_REGISTRY}
@@ -56,12 +59,11 @@
   variables: &git_variables
     GIT_DEPTH: "5"
     GET_SOURCES_ATTEMPTS: 1
-    GIT_CLONE_PATH: "${CI_BUILDS_DIR}/${CI_PROJECT_PATH}/${CI_CONCURRENT_PROJECT_ID}"
-    GIT_CLEAN_FLAGS: "none"
+    GIT_CLEAN_FLAGS: "-ffdx"
     GIT_SUBMODULE_STRATEGY: "none"
-    GIT_SUBMODULE_UPDATE_FLAGS: "none"
-    GIT_SUBMODULE_DEPTH: "1"
-    GIT_FETCH_EXTRA_FLAGS: "--jobs=${BSG_CI_CORES_PER_JOB} --prune --no-tags"
+    GIT_SUBMODULE_UPDATE_FLAGS: ""
+    GIT_SUBMODULE_DEPTH: "0"
+    GIT_FETCH_EXTRA_FLAGS: "--prune --jobs=${BSG_CI_CORES_PER_JOB}"
 
 # https://docs.gitlab.com/user/packages/package_registry/
 .api_anchors:
@@ -139,6 +141,9 @@
     <<: *job_variables
     <<: *bsg_variables
     GIT_STRATEGY: "fetch"
+    # https://gitlab.com/gitlab-org/gitlab-runner/-/issues/3688
+    CI_BUILDS_DIR: "/builds/$CI_PROJECT_NAME"
+    GIT_CLONE_PATH: "$CI_BUILDS_DIR/$CI_PIPELINE_ID/$CI_CONCURRENT_ID"
   tags: [bsg]
   interruptible: true
   hooks:
@@ -146,13 +151,13 @@
       - echo "[CI] configuring git to fetch with HTTP 1.1"
       - git config --global http.version HTTP/1.1
       - git config --global http.postBuffer 157286400
+      - |
+        if [[ "$[[ inputs.do_clean_run ]]" == "true" ]]; then
+          ls $GIT_CLONE_PATH || :;
+          rm -rf $GIT_CLONE_PATH;
+        fi
   before_script:
     - echo "[CI] cleaning up from previous job"
-    - |
-      if [ -d .git ]; then
-        git submodule deinit -f .
-        find -name "*.lock" -exec rm {} \;
-      fi
     - rm -rf ${JOB_FAILURE_ROOT}/* ${JOB_LOG_ROOT}/* ${JOB_RPT_ROOT}/* ${JOB_DEPS_ROOT}/*
     - echo "[CI] initializing job directories"
     - |
@@ -163,7 +168,7 @@
         mkdir -p $d
         touch $d/.keep
       done
-    - echo "[CI] Initializing ${CI_PROJECT_NAME} common @ ${JOB_COMMON_ROOT}"
+    - echo "[CI] initializing ${CI_PROJECT_NAME} common @ ${JOB_COMMON_ROOT}"
     - mkdir -p ${JOB_COMMON_ROOT} && ls ${JOB_COMMON_ROOT}
     - echo "[CI] moving artifacts from previous job"
     - |

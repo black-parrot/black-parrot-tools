@@ -5,10 +5,8 @@
 #############################
 ## These should really not be changed
 SHELL := /bin/bash
-EXTRAMAKEFLAGS += --warn-undefined-variables
-MAKEFLAGS += $(EXTRAMAKEFLAGS)
-GITJ := 4
 IS_TOP := $(if $(filter $(TOP),$(CURDIR)),1,0)
+IS_SINGLE := $(if $(filter 1,$(words $(MAKECMDGOALS))),1,0)
 .DEFAULT_GOAL: help
 
 #############################
@@ -17,6 +15,8 @@ IS_TOP := $(if $(filter $(TOP),$(CURDIR)),1,0)
 ## these are variables and functions that can be used line functions
 
 bsg_var_blank :=
+
+bsg_var_space := $(bsg_var_blank) # end of the line
 
 define bsg_var_newline
 
@@ -45,48 +45,7 @@ endef
 #############################
 # function templates
 #############################
-
-define bsg_fn_info
-	$(eval $@_msg := $(1))
-	echo "BSG-INFO: ${$@_msg}"
-endef
-
-define bsg_fn_warn
-	$(eval $@_msg := $(1))
-	echo "BSG-WARN: ${$@_msg}"
-endef
-
-define bsg_fn_error
-	$(eval $@_msg := $(1))
-	echo "BSG-ERROR: ${$@_msg}"
-endef
-
-define bsg_fn_mkhookdirs
-	$(eval $@_hookdirs := $(1))
-	$(eval $@_hookmatch := $(addsuffix /%,$($@_hookdirs)))
-	$(eval $@_uservars := $(call bsg_var_user))
-	$(eval $@_uppervars := $(filter $(call bsg_var_upper,$($@_uservars)),$($@_uservars)))
-	$(eval $@_uppervals := $(foreach var,$($@_uppervars),$($(var))))
-	$(eval $@_extradirs := $(filter $($@_hookmatch),$($@_uppervals)))
-	$(call bsg_fn_info,"hookdirs: ${$@_hookdirs}")
-	mkdir -p ${$@_hookdirs} && ls ${$@_hookdirs} || :
-	$(call bsg_fn_info,"extradirs: ${$@_extradirs}");
-	mkdir -p ${$@_extradirs} && ls ${$@_extradirs} || :
-endef
-
-define bsg_fn_checkout_submodules
-	$(eval $@_hooks := $(1))
-	git submodule foreach --recursive 'git config --unset submodule.$$name.update || :'
-	git submodule foreach --recursive " \
-		key=\$$toplevel@\$$sm_path; \
-		case ' ${$@_hooks} ' in \
-			*' '\$$key' '*) \
-				echo \"skipping \$$key\";; \
-			*) \
-				git -C \$$toplevel submodule update --init --recursive --jobs=$(GITJ) \$$sm_path;; \
-		esac \
-	"
-endef
+## these can be implemented as $(call statements)
 
 define bsg_fn_default_configure
 	$(eval $@_work := $(1))
@@ -94,14 +53,13 @@ define bsg_fn_default_configure
 	$(eval $@_prefix := $(3))
 	$(eval $@_extra := $(4))
 	$(eval $@_strip := -s -Wl,--gc-sections)
-	$(call bsg_info,attempting autoconf)
-	cd ${$@_src}; autoconf -o ./configure || :
-	$(call bsg_info,attempting configure)
+	cd ${$@_src}; autoconf -o ./configure || :; \
 	cd ${$@_work}; \
 		CFLAGS="$(CFLAGS)" \
 		CXXFLAGS="$(CXXFLAGS)" \
 		LDFLAGS="${$@_strip} $(LDFLAGS)" \
-		${$@_src}/configure --srcdir=${$@_src} --prefix=${$@_prefix} ${$@_extra} || :
+		${$@_src}/configure --srcdir=${$@_src} --prefix=${$@_prefix} ${$@_extra} || :; \
+	:;
 endef
 
 define bsg_fn_default_cmake
@@ -114,7 +72,8 @@ define bsg_fn_default_cmake
 		-DCMAKE_BUILD_TYPE=Release \
 		-DCMAKE_C_FLAGS="$(CFLAGS)" \
 		-DCMAKE_CXX_FLAGS="$(CXXFLAGS)" \
-		-DCMAKE_EXE_LINKER_FLAGS="${$@_strip} $(LDFLAGS)"
+		-DCMAKE_EXE_LINKER_FLAGS="${$@_strip} $(LDFLAGS)"; \
+	:;
 endef
 
 define bsg_fn_strip_binaries
@@ -125,44 +84,77 @@ define bsg_fn_strip_binaries
 				strip "$$file" >/dev/null 2>&1 || :; \
 			fi; \
 	done \
-	' sh {} +
+	' sh {} +; \
+	:;
 endef
 
 #############################
-# target templates
+# templates
 #############################
 ## these can be implemented as $(eval $(call statements))
 
 define bsg_tgt_build_tag
-	$(eval MAKEFLAGS := $(filter-out $(EXTRAMAKEFLAGS),$(MAKEFLAGS)))
 	$(eval name := $(1))
 	$(eval src_dir := $(2))
 	$(eval touch_dir := $(3))
 	$(eval patch_dir := $(4))
 	$(eval work_dir := $(5))
 	$(eval tag := $(6))
-	# patch targets
+	$(eval checkout_tag := $(touch_dir)/$(name).checkout.$(tag))
+	$(eval checkout_target := checkout.$(name))
+	$(eval uncheckout_target := un$(checkout_target))
+	$(eval recheckout_target := re$(checkout_target))
 	$(eval patch_tag := $(touch_dir)/$(name).patch.$(tag))
 	$(eval patch_target := patch.$(name))
-	$(eval repatch_target := repatch.$(name))
-	# build targets
+	$(eval unpatch_target := un$(patch_target))
+	$(eval repatch_target := re$(patch_target))
 	$(eval build_tag := $(touch_dir)/$(name).build.$(tag))
 	$(eval build_target := build.$(name))
-	$(eval rebuild_target := rebuild.$(name))
+	$(eval unbuild_target := un$(build_target))
+	$(eval rebuild_target := re$(build_target))
 	$(eval internal_target := $(work_dir)/$(name)/.$(name)_build)
-$(patch_target): | $(patch_tag)
-$(repatch_target):
+$(uncheckout_target): $(unpatch_target)
+	@rm -f $(touch_dir)/$(name).checkout.*
+	if [ -f $(src_dir)/.git ]; then \
+		git submodule --quiet deinit --force $(src_dir); \
+		git submodule --quiet init $(src_dir); \
+		git submodule --quiet sync $(src_dir); \
+	fi
+$(checkout_target): | $(checkout_tag)
+$(recheckout_target): $(uncheckout_target)
+	@+$(MAKE) $(checkout_tag)
+$(checkout_tag):
+	@git submodule update $(src_dir)
+	@if [ -f $(src_dir)/.git ]; then \
+		git -C $(src_dir) submodule foreach --quiet "git submodule init"; \
+		git -C $(src_dir) submodule foreach --quiet "git submodule sync"; \
+		all_submodules=$$$$(git -C $(src_dir) submodule status --recursive | awk '{print $$$$2}'); \
+		if [ -n "$$$$all_submodules" ]; then \
+			skip_patterns="$(subst $(notdir $(src_dir))/,,$(subst $(bsg_var_space),,$(foreach s,$(HOOK_DISABLE_SUBMODULES),$(s).*|)))xnomatchx"; \
+			skip_submodules=$$$$(printf "%s\n" $$$$all_submodules | grep    -E "$$$$skip_patterns"); \
+			good_submodules=$$$$(printf "%s\n" $$$$all_submodules | grep -v -E "$$$$skip_patterns"); \
+			printf "all submodules: %s\n" $$$$all_submodules; \
+			printf "submodules skipped: %s\n" $$$$skip_submodules; \
+			printf "submodules updating: %s\n" $$$$good_submodules; \
+			printf "%s\n" "$$$$good_submodules" | while read -r s; do \
+    			git -C $(src_dir) submodule update --init --recursive "$$$$s"; \
+			done; \
+		fi; \
+	fi
+	@touch $$@
+$(unpatch_target): $(unbuild_target)
 	@rm -f $(touch_dir)/$(name).patch.*
 	@if [ -f $(src_dir)/.git ]; then \
-		git submodule update --quiet --init --force $(src_dir); \
-		git -C $(src_dir) clean -fdx; \
-		git -C $(src_dir) submodule foreach 'git clean -fdx; git reset --hard'; \
+		git -C $(src_dir) reset --hard --recurse-submodules; \
+		git -C $(src_dir) submodule sync --recursive; \
 	fi
+$(patch_target): | $(patch_tag)
+$(repatch_target): $(unpatch_target)
 	@+$(MAKE) $(patch_tag)
-$(patch_tag):
+$(patch_tag): $(checkout_tag)
 	@$(eval patch_root := $(patch_dir)/$(if $(src_dir),$(shell $(BASENAME) $(src_dir)),$(name)))
 	@$(eval patch_files := $(shell $(FIND) $(patch_root) -name "*.patch" 2>/dev/null))
-	# For some reason the bash for loop doesn't work here
+	@# For some reason the bash for loop doesn't work here
 	@echo "Applying patches $(patch_files)"
 	@$(foreach p,$(patch_files),\
 		git apply --ignore-whitespace --ignore-space-change $(p) --directory $(dir $(subst $(patch_dir)/,,$(p)));\
@@ -172,10 +164,15 @@ $(patch_tag):
 		git apply --ignore-whitespace --ignore-space-change --check --reverse  $(p) --directory $(dir $(subst $(patch_dir)/,,$(p)));\
 	)
 	@touch $$@
-$(build_target): | $(build_tag)
-$(rebuild_target): $(repatch_target)
+$(unbuild_target):
 	@rm -rf $(touch_dir)/$(name).build.*
 	@rm -rf  $(work_dir)/$(name)
+	@if [ -f $(src_dir)/.git ]; then \
+		git -C $(src_dir) clean -ffdx; \
+		git -C $(src_dir) submodule foreach --recursive git clean -ffdx; \
+	fi
+$(build_target): | $(build_tag)
+$(rebuild_target): $(unbuild_target)
 	@+$(MAKE) $(build_tag)
 $(build_tag): | $(patch_tag)
 	@mkdir -p $(work_dir)/$(name)
@@ -190,14 +187,14 @@ define bsg_tgt_build_submodule
 	$(eval touch_dir := $(3))
 	$(eval patch_dir := $(4))
 	$(eval work_dir := $(5))
-	$(eval tag := $(if $(src_dir),$(shell cd $(src_dir); git rev-parse HEAD),any))
-	$(eval $(call bsg_tgt_build_tag,$(name),$(src_dir),$(touch_dir),$(patch_dir),$(work_dir),$(tag)))
+	$(eval tag := $(if $(src_dir),$(shell git ls-files --stage $(src_dir) | awk '{print $$2}'),any))
+	$(call bsg_tgt_build_tag,$(name),$(src_dir),$(touch_dir),$(patch_dir),$(work_dir),$(tag))
 endef
 
 #############################
-# Makefile targets
+# targets
 #############################
-# Global help
+# global help
 .PHONY: help
 help: ## prints this target
 	@$(eval HELPFILTER := $(if $(findstring $(CURDIR),$(TOP)),xxxxxxxx,checkout|bleach_all))
@@ -206,19 +203,58 @@ help: ## prints this target
 		| awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m  %-30s\033[0m %s\n", $$1, $$2}'
 
 ifeq ($(IS_TOP),1)
-# Global reset
+# global reset
 .PHONY: bleach_all
 bleach_all: ## wipes the whole repo clean: use with caution
-	@git -C "$(TOP)" submodule deinit -f .
-	@git -C "$(TOP)" clean -ffdx
+	@git stash
+	@git clean -ffdx
+	@git reset --hard
+	@git submodule foreach --quiet 'git clean -fdx'
+	@git submodule foreach --quiet 'git reset --hard'
 
-# Global checkout
+# global checkout
 .PHONY: checkout
 checkout: $(BSG_CADENV_DIR)
 checkout: ## checkout submodules
-	@$(call bsg_fn_mkhookdirs,$(HOOK_CHECKOUT_DIRS))
-	@git -C "$(TOP)" submodule update --init --jobs=$(GITJ)
-	@$(call bsg_fn_checkout_submodules,$(HOOK_DISABLE_SUBMODULES))
+	@$(eval $@_hookdirs := $(HOOK_CHECKOUT_DIRS))
+	@$(eval $@_hookmatch := $(addsuffix /%,$($@_hookdirs)))
+	@$(eval $@_uservars := $(call bsg_var_user))
+	@$(eval $@_uppervars := $(filter $(call bsg_var_upper,$($@_uservars)),$($@_uservars)))
+	@$(eval $@_uppervals := $(foreach var,$($@_uppervars),$($(var))))
+	@$(eval $@_extradirs := $(filter $($@_hookmatch),$($@_uppervals)))
+	@mkdir -p ${$@_hookdirs} ${$@_extradirs}
+	@git submodule init
+	@git submodule sync
+
+# stub bsg_cadenv
+%/cadenv.mk:
+	@# BSG users leverage a machine-specific cadenv
+	@#   Here, we add sourcing to get these variables as well
+	@$(eval export CADENV_URL := git@github.com:bespoke-silicon-group/bsg_cadenv)
+	@# Recursive make to include the new fragment
+	@if [ -f "$(BSG_CADENV_DIR)/cadenv.mk" ]; then \
+		echo "bsg_cadenv already exists"; \
+	elif [[ ! -z $$(git ls-remote --exit-code $${CADENV_URL} HEAD 2> /dev/null) ]]; then \
+		git clone --recurse-submodules $${CADENV_URL} $(@D); \
+	else \
+		echo "bsg_cadenv not found"; \
+		mkdir -p $(@D); \
+		touch $@; \
+	fi
+	@echo "Successfully built $@!"
+
+endif
+
+ifneq ($(IS_SINGLE),1)
+ifneq (,$(filter help,$(MAKECMDGOALS)))
+$(error help must be called as a single target)
+endif
+ifneq (,$(filter bleach_all,$(MAKECMDGOALS)))
+$(error bleach_all must be called as a single target)
+endif
+ifneq (,$(filter checkout,$(MAKECMDGOALS)))
+$(error checkout must be called as a single target)
+endif
 endif
 
 ##########################################################
@@ -257,21 +293,6 @@ export VCS_ARCH_OVERRIDE=linux
 ifneq (,$(filter-out bleach_all help ,$(MAKECMDGOALS)))
 BSG_CADENV_DIR ?= $(TOP)/bsg_cadenv
 include $(BSG_CADENV_DIR)/cadenv.mk
-%/cadenv.mk:
-	# BSG users leverage a machine-specific cadenv
-	#   Here, we add sourcing to get these variables as well
-	@$(eval export CADENV_URL := git@github.com:bespoke-silicon-group/bsg_cadenv)
-	# Recursive make to include the new fragment
-	@if [ -f "$(BSG_CADENV_DIR)/cadenv.mk" ]; then \
-		echo "bsg_cadenv already exists"; \
-	elif [[ ! -z $$(git ls-remote --exit-code $${CADENV_URL} HEAD 2> /dev/null) ]]; then \
-		git clone --recurse-submodules $${CADENV_URL} $(@D); \
-	else \
-		echo "bsg_cadenv not found"; \
-		mkdir -p $(@D); \
-		touch $@; \
-	fi
-	@echo "Successfully built $@!"
 endif
 
 # Saves initial values so that we can filter them later

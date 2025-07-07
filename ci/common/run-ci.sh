@@ -16,7 +16,7 @@ bsg_log_raw "with arguments: $*"
 # Check if there are no arguments
 if [ "$#" -eq 0 ]; then
 	bsg_log_error "no script specified"
-	bsg_log_raw "usage: run-local.sh <ci-script.sh>"
+	bsg_log_raw "usage: run-ci.sh <ci-script.sh>"
 	exit 1
 fi
 

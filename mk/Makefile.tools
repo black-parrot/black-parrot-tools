@@ -7,7 +7,7 @@ $(eval $(call bsg_tgt_build_submodule,axe,$(BP_AXE_DIR),$(BP_TOUCH_DIR),$(BP_PAT
 
 $(eval $(call bsg_tgt_build_submodule,bsg_fakeram,$(BP_FAKERAM_DIR),$(BP_TOUCH_DIR),$(BP_PATCH_DIR),$(BP_WORK_DIR)))
 %/.bsg_fakeram_build:
-	@$(MAKE) -j1 -C $< tools
+	@+$(MAKE) -j1 -C $< tools
 	@$(call bsg_fn_strip_binaries, $(BP_INSTALL_DIR))
 
 $(eval $(call bsg_tgt_build_submodule,bsg_sv2v,$(BP_SV2V_DIR),$(BP_TOUCH_DIR),$(BP_PATCH_DIR),$(BP_WORK_DIR)))
@@ -26,7 +26,7 @@ $(eval $(call bsg_tgt_build_submodule,dromajo,$(BP_DROMAJO_DIR),$(BP_TOUCH_DIR),
 %/.dromajo_build:
 	@$(eval EXTRA_CONFIGURE_FLAGS := )
 	@$(call bsg_fn_default_cmake,$(@D),$<,$(BP_INSTALL_DIR),$(EXTRA_CONFIGURE_FLAGS))
-	@$(MAKE) -C $(@D)
+	@+$(MAKE) -C $(@D)
 	@$(CP) $(@D)/dromajo $(BP_BIN_DIR)
 	@$(CP) $(@D)/libdromajo_cosim.a $(BP_LIB_DIR)
 	@$(CP) $</include/* $(BP_INCLUDE_DIR)
@@ -36,37 +36,37 @@ $(eval $(call bsg_tgt_build_submodule,spike,$(BP_SPIKE_DIR),$(BP_TOUCH_DIR),$(BP
 %/.spike_build:
 	@$(eval EXTRA_CONFIGURE_FLAGS := --without-boost --without-boost-asio --without-boost-regex)
 	@$(call bsg_fn_default_configure,$(@D),$<,$(BP_INSTALL_DIR),$(EXTRA_CONFIGURE_FLAGS))
-	@$(MAKE) -C $(@D) install
+	@+$(MAKE) -C $(@D) install
 	@$(call bsg_fn_strip_binaries, $(BP_INSTALL_DIR))
 
 $(eval $(call bsg_tgt_build_submodule,surelog,$(BP_SURELOG_DIR),$(BP_TOUCH_DIR),$(BP_PATCH_DIR),$(BP_WORK_DIR)))
 %/.surelog_build:
 	@$(call bsg_fn_default_cmake,$(@D),$<,$(BP_INSTALL_DIR),$(EXTRA_CONFIGURE_FLAGS))
-	@$(MAKE) -C $(@D) install
+	@+$(MAKE) -C $(@D) install
 	@$(call bsg_fn_strip_binaries, $(BP_INSTALL_DIR))
 
 $(eval $(call bsg_tgt_build_submodule,verilator,$(BP_VERILATOR_DIR),$(BP_TOUCH_DIR),$(BP_PATCH_DIR),$(BP_WORK_DIR)))
 %/.verilator_build:
 	@$(eval EXTRA_CONFIGURE_FLAGS := )
 	@$(call bsg_fn_default_configure,$(@D),$<,$(BP_INSTALL_DIR),$(EXTRA_CONFIGURE_FLAGS))
-	@$(MAKE) -C $(@D) all
-	@$(MAKE) -C $(@D) install
-	@$(MAKE) -C $(@D) install-all
+	@+$(MAKE) -C $(@D) all
+	@+$(MAKE) -C $(@D) install
+	@+$(MAKE) -C $(@D) install-all
 	@$(call bsg_fn_strip_binaries, $(BP_INSTALL_DIR))
 
 $(eval $(call bsg_tgt_build_submodule,yosys,$(BP_YOSYS_DIR),$(BP_TOUCH_DIR),$(BP_PATCH_DIR),$(BP_WORK_DIR)))
 %/.yosys_build:
 	@$(eval export PREFIX := $(BP_INSTALL_DIR))
-	@$(MAKE) -C $< config-gcc
-	@$(MAKE) -C $< install
+	@+$(MAKE) -C $< config-gcc
+	@+$(MAKE) -C $< install
 	@$(call bsg_fn_strip_binaries, $(BP_INSTALL_DIR))
 
 $(eval $(call bsg_tgt_build_submodule,yslang,$(BP_YSLANG_DIR),$(BP_TOUCH_DIR),$(BP_PATCH_DIR),$(BP_WORK_DIR)))
 %/.yslang_build:
 	@$(eval export YOSYS_PLUGIN_DIR := $(BP_INSTALL_DIR)/share/yosys/plugins)
 	@$(eval export YOSYS_PREFIX := $(BP_INSTALL_DIR)/bin/)
-	@$(MAKE) build.yosys
-	@$(MAKE) -C $<
+	@+$(MAKE) build.yosys
+	@+$(MAKE) -C $<
 	@$(MKDIR) -p $(YOSYS_PLUGIN_DIR)
 	@$(CP) $</build/*.so $(YOSYS_PLUGIN_DIR)
 	@$(call bsg_fn_strip_binaries, $(BP_INSTALL_DIR))

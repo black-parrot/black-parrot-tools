@@ -1,15 +1,51 @@
 
+spec:
+  inputs:
+    # global
+    platforms:
+      type: array
+      default: ["centos7", "ubuntu24.04"]
+    # passthrough
+    do_clean_run:
+      type: boolean
+      default: false
+    # passthrough
+    do_build_image:
+      type: string
+      options: ["never", "on_event", "on_success"]
+      default: "on_event"
+    do_build_tools:
+      type: string
+      options: ["never", "on_event", "on_success"]
+      default: "on_success"
+    do_smoke_tools:
+      type: string
+      options: ["never", "on_event", "on_success"]
+      default: "on_success"
+---
+
+###################################################
+## trigger child pipelines
+###################################################
 trigger_job:
-  variables:
-    DOCKER_PLATFORM: "setme"
-    CONTAINER_IMAGE: "$CI_REGISTRY_IMAGE:$DOCKER_PLATFORM"
   interruptible: true
+  variables:
+    DOCKER_PLATFORM: "$DOCKER_PLATFORM"
+    CONTAINER_IMAGE: "$CI_REGISTRY_IMAGE:$DOCKER_PLATFORM"
   trigger:
     strategy: depend
-    include: .gitlab-ci.local.yml
+    include:
+      - local: .gitlab-ci.common.yml
+        inputs:
+          do_clean_run  : $[[ inputs.do_clean_run   ]]
+      - local: .gitlab-ci.local.yml
+        inputs:
+          do_build_image : $[[ inputs.do_build_image ]]
+          do_build_tools : $[[ inputs.do_build_tools ]]
+          do_smoke_tools : $[[ inputs.do_smoke_tools ]]
   parallel:
     matrix:
-      - DOCKER_PLATFORM: ["centos7", "ubuntu24.04"]
+      - DOCKER_PLATFORM: $[[ inputs.platforms ]]
 
 ###################################################
 ## workflow
@@ -19,5 +55,5 @@ workflow:
     on_new_commit: interruptible
     on_job_failure: all
   rules:
-    - if: $CI_COMMIT_BRANCH =~ "/^ci_.*$|master|main/"
+    - if: '$CI_COMMIT_BRANCH =~ "/^ci_.*$|master|main/"'
 
