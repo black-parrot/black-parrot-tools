@@ -18,9 +18,14 @@ There are also common Makefile targets to maintain the repository:
 
 
     make checkout;       # checkout submodules. Should be done before building tools
-    make bleach_all;     # wipes the whole repo clean. Use with caution
     make help;           # prints information about documented targets
+    make bleach_all;     # wipes the whole repo clean. Use with caution
 
+And some lesser tested, maintenance operations
+
+    make clean;          # cleans up submodule working directory
+    make tidy;           # unpatches submodules
+    make bleach;         # deinitializes submodules
 
 For advanced usage or debugging, standardized targets are provided for each tool.
 By default, these targets will only run if needed.

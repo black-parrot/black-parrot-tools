@@ -113,8 +113,13 @@ define bsg_tgt_build_tag
 	$(eval unbuild_target := un$(build_target))
 	$(eval rebuild_target := re$(build_target))
 	$(eval internal_target := $(work_dir)/$(name)/.$(name)_build)
+	$(eval patch_root := $(patch_dir)/$(if $(src_dir),$(shell basename $(src_dir)),$(name)))
+	$(eval patch_files := $(shell find $(patch_root) -name "*.patch" 2>/dev/null))
+	$(eval APPLY_PATCH := git apply --ignore-whitespace --ignore-space-change)
+	$(eval REVRS_PATCH := $(APPLY_PATCH) --reverse)
+	$(eval CHECK_PATCH := $(REVRS_PATCH) --check)
+
 $(uncheckout_target): $(unpatch_target)
-	@rm -f $(touch_dir)/$(name).checkout.*
 	if [ -f $(src_dir)/.git ]; then \
 		git submodule --quiet deinit --force $(src_dir); \
 		git submodule --quiet init $(src_dir); \
@@ -122,6 +127,7 @@ $(uncheckout_target): $(unpatch_target)
 	fi
 $(checkout_target): | $(checkout_tag)
 $(recheckout_target): $(uncheckout_target)
+	@rm -f $(touch_dir)/$(name).checkout.*
 	@+$(MAKE) $(checkout_tag)
 $(checkout_tag):
 	@git submodule update $(src_dir)
@@ -133,7 +139,6 @@ $(checkout_tag):
 			skip_patterns="$(subst $(notdir $(src_dir))/,,$(subst $(bsg_var_space),,$(foreach s,$(HOOK_DISABLE_SUBMODULES),$(s).*|)))xnomatchx"; \
 			skip_submodules=$$$$(printf "%s\n" $$$$all_submodules | grep    -E "$$$$skip_patterns"); \
 			good_submodules=$$$$(printf "%s\n" $$$$all_submodules | grep -v -E "$$$$skip_patterns"); \
-			printf "all submodules: %s\n" $$$$all_submodules; \
 			printf "submodules skipped: %s\n" $$$$skip_submodules; \
 			printf "submodules updating: %s\n" $$$$good_submodules; \
 			printf "%s\n" "$$$$good_submodules" | while read -r s; do \
@@ -143,42 +148,44 @@ $(checkout_tag):
 	fi
 	@touch $$@
 $(unpatch_target): $(unbuild_target)
-	@rm -f $(touch_dir)/$(name).patch.*
+	@$(foreach p,$(patch_files),\
+		$(REVRS_PATCH) $(p) --directory $(dir $(subst $(patch_dir)/,,$(p))) || :;\
+		)
 	@if [ -f $(src_dir)/.git ]; then \
 		git -C $(src_dir) reset --hard --recurse-submodules; \
 		git -C $(src_dir) submodule sync --recursive; \
 	fi
 $(patch_target): | $(patch_tag)
 $(repatch_target): $(unpatch_target)
+	@rm -f $(touch_dir)/$(name).patch.*
 	@+$(MAKE) $(patch_tag)
 $(patch_tag): $(checkout_tag)
-	@$(eval patch_root := $(patch_dir)/$(if $(src_dir),$(shell $(BASENAME) $(src_dir)),$(name)))
-	@$(eval patch_files := $(shell $(FIND) $(patch_root) -name "*.patch" 2>/dev/null))
-	@# For some reason the bash for loop doesn't work here
-	@echo "Applying patches $(patch_files)"
+	@echo "applying patches $(patch_files)"
 	@$(foreach p,$(patch_files),\
-		git apply --ignore-whitespace --ignore-space-change $(p) --directory $(dir $(subst $(patch_dir)/,,$(p)));\
-	)
+		$(APPLY_PATCH) $(p) --directory $(dir $(subst $(patch_dir)/,,$(p)));\
+		)
 	@echo "Checking patches $(patch_files)"
 	@$(foreach p,$(patch_files),\
-		git apply --ignore-whitespace --ignore-space-change --check --reverse  $(p) --directory $(dir $(subst $(patch_dir)/,,$(p)));\
-	)
+		$(CHECK_PATCH) $(p) --directory $(dir $(subst $(patch_dir)/,,$(p)));\
+		)
 	@touch $$@
 $(unbuild_target):
-	@rm -rf $(touch_dir)/$(name).build.*
-	@rm -rf  $(work_dir)/$(name)
-	@if [ -f $(src_dir)/.git ]; then \
-		git -C $(src_dir) clean -ffdx; \
-		git -C $(src_dir) submodule foreach --recursive git clean -ffdx; \
-	fi
+	@rm -rf $(work_dir)/$(name)
 $(build_target): | $(build_tag)
 $(rebuild_target): $(unbuild_target)
+	@rm -f $(touch_dir)/$(name).build.*
 	@+$(MAKE) $(build_tag)
 $(build_tag): | $(patch_tag)
 	@mkdir -p $(work_dir)/$(name)
 	@+$(MAKE) $(internal_target)
 	@touch $$@
 $(internal_target): $(src_dir)
+bleach::
+	@+$(MAKE) $(uncheckout_target)
+tidy::
+	@+$(MAKE) $(unpatch_target)
+clean::
+	@+$(MAKE) $(unbuild_target)
 endef
 
 define bsg_tgt_build_submodule
@@ -197,7 +204,7 @@ endef
 # global help
 .PHONY: help
 help: ## prints this target
-	@$(eval HELPFILTER := $(if $(findstring $(CURDIR),$(TOP)),xxxxxxxx,checkout|bleach_all))
+	@$(eval HELPFILTER := $(if $(findstring $(CURDIR),$(TOP)),xxxxxxxx,checkout|bleach_all|tidy|clean|bleach))
 	@grep -h '\s##\s' $(MAKEFILE_LIST) \
 		| grep -Ev "$(HELPFILTER)" \
 		| awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m  %-30s\033[0m %s\n", $$1, $$2}'
@@ -209,8 +216,9 @@ bleach_all: ## wipes the whole repo clean: use with caution
 	@git stash
 	@git clean -ffdx
 	@git reset --hard
-	@git submodule foreach --quiet 'git clean -fdx'
-	@git submodule foreach --quiet 'git reset --hard'
+	@git submodule foreach --recursive --quiet 'git clean -fdx'
+	@git submodule foreach --recursive --quiet 'git reset --hard'
+	@git submodule deinit -f .
 
 # global checkout
 .PHONY: checkout
@@ -225,6 +233,18 @@ checkout: ## checkout submodules
 	@mkdir -p ${$@_hookdirs} ${$@_extradirs}
 	@git submodule init
 	@git submodule sync
+
+# global submodule tidy
+.PHONY: tidy
+tidy:: ## tidies up submodules
+
+# global submodule bleach
+.PHONY: bleach
+bleach:: ## deinitializes submodules
+
+# global submodule bleach
+.PHONY: clean
+clean:: ## cleans submodules
 
 # stub bsg_cadenv
 %/cadenv.mk:
