@@ -23,9 +23,7 @@
 [submodule "yosys-slang"]
     path = yosys-slang
     url = https://github.com/povik/yosys-slang.git
-
-# BlackParrot forks
 [submodule "dromajo"]
     path = dromajo
-    url = https://github.com/bsg-external/dromajo
+    url = https://github.com/chipsalliance/dromajo
 
