@@ -8,6 +8,7 @@ tools_lite: ## minimal set of simulation tools
 tools_lite:
 	@+$(MAKE) build.verilator
 	@+$(MAKE) build.dromajo
+	@$(call bsg_fn_strip_binaries, $(BP_INSTALL_DIR))
 
 tools: ## standard tools
 tools: tools_lite
@@ -16,6 +17,7 @@ tools: tools_lite
 	@+$(MAKE) build.yosys
 	@+$(MAKE) build.yslang
 	@+$(MAKE) build.axe
+	@$(call bsg_fn_strip_binaries, $(BP_INSTALL_DIR))
 
 tools_bsg: ## additional tools for BSG users
 tools_bsg: tools 
@@ -23,4 +25,5 @@ tools_bsg: tools
 	@+$(MAKE) build.bsg_sv2v || :
 	@+$(MAKE) build.bsg_sv2v
 	@+$(MAKE) build.bsg_fakeram
+	@$(call bsg_fn_strip_binaries, $(BP_INSTALL_DIR))
 

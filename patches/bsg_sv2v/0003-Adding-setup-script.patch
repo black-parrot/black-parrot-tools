@@ -1,0 +1,23 @@
+From 8143ad883b24a7e22b131ebc6a1521485a16ba08 Mon Sep 17 00:00:00 2001
+From: Dan Ruelas-Petrisko <petrisko@cs.washington.edu>
+Date: Sun, 3 Aug 2025 16:52:14 -0700
+Subject: [PATCH 3/4] Adding setup script
+
+---
+ scripts/tcl/bsg_sv2v_setup.tcl | 4 ++++
+ 1 file changed, 4 insertions(+)
+ create mode 100644 scripts/tcl/bsg_sv2v_setup.tcl
+
+diff --git a/scripts/tcl/bsg_sv2v_setup.tcl b/scripts/tcl/bsg_sv2v_setup.tcl
+new file mode 100644
+index 0000000..ff69db4
+--- /dev/null
++++ b/scripts/tcl/bsg_sv2v_setup.tcl
+@@ -0,0 +1,4 @@
++
++set_app_var hdlin_sv_interface_only_modules \
++    {bsg_mem_3r1w_sync bsg_mem_2r1w_sync bsg_mem_1r1w_sync bsg_mem_1r1w_sync_mask_write_byte bsg_mem_1r1w_sync_mask_write_bit bsg_mem_1rw_sync bsg_mem_1rw_sync_mask_write_byte bsg_mem_1rw_sync_mask_write_bit}
++
+-- 
+2.18.4
+

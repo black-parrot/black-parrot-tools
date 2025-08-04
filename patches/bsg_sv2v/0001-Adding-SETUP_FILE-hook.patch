@@ -1,0 +1,45 @@
+From 68f99ee0e9ccb14371d70f50bdf99c278350630a Mon Sep 17 00:00:00 2001
+From: Dan Ruelas-Petrisko <petrisko@cs.washington.edu>
+Date: Sun, 3 Aug 2025 16:50:40 -0700
+Subject: [PATCH 1/4] Adding SETUP_FILE hook
+
+---
+ scripts/tcl/run_dc.tcl | 8 ++++++++
+ 1 file changed, 8 insertions(+)
+
+diff --git a/scripts/tcl/run_dc.tcl b/scripts/tcl/run_dc.tcl
+index da12568..debf021 100644
+--- a/scripts/tcl/run_dc.tcl
++++ b/scripts/tcl/run_dc.tcl
+@@ -17,20 +17,28 @@ set OUTPUT_FILE      $::env(OUTPUT_ELAB_FILE)  ;# Output filename
+ 
+ set_svf -off                                                           ;# No need to svf file (for fomality)
+ set_app_var link_library                     ""                        ;# Empty link library
+ set_app_var target_library                   "*"                       ;# Default target library
+ set_app_var hdlin_infer_mux                  none                      ;# Use SELCT_OP over MUX_OP synthetic module
+ set_app_var sh_command_log_file              $OUTPUT_DIR/command.log   ;# Redirect command.log file
+ set_app_var verilogout_no_tri                true                      ;# Make unknown port connections wires not tris
+ set_app_var hdlin_ff_always_sync_set_reset   true                      ;# Try to infer synchronous set/reset logic
+ set_app_var hdlin_ff_always_async_set_reset  false                     ;# Don't try to infer asynchronous set/reset logic
+ 
++### Do additional design setup
++
++if {[info exists ::env(SETUP_FILE)]} {
++    if {[file exists $::env(SETUP_FILE)]} {
++        source -echo -verbose $::env(SETUP_FILE)
++    }
++}
++
+ ### Read in the filelist
+ 
+ # Here we read in the filelist. For our designs, we often use VCS filelists to
+ # link the whole design together. Inside these filelists are 5 main items:
+ #
+ #   1. Comments        -- begging in the # character
+ #   2. +incdir+<path>  -- adding a search directory for includes
+ #   3. +define+<macro> -- adding a macro definition at compile time
+ #   4. -pvalue+<param> -- top-level parametes
+ #   5. <file>          -- verilog files
+-- 
+2.18.4
+

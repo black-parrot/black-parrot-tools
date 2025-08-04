@@ -1,0 +1,72 @@
+From 43f6411d88bdd8a36d9864dc68fafaf75f1af9c7 Mon Sep 17 00:00:00 2001
+From: Dan Ruelas-Petrisko <petrisko@cs.washington.edu>
+Date: Sun, 3 Aug 2025 16:52:20 -0700
+Subject: [PATCH 4/4] Adding run script
+
+---
+ scripts/bsg_sv2v_run.sh | 53 +++++++++++++++++++++++++++++++++++++++++
+ 1 file changed, 53 insertions(+)
+ create mode 100755 scripts/bsg_sv2v_run.sh
+
+diff --git a/scripts/bsg_sv2v_run.sh b/scripts/bsg_sv2v_run.sh
+new file mode 100755
+index 0000000..a191277
+--- /dev/null
++++ b/scripts/bsg_sv2v_run.sh
+@@ -0,0 +1,53 @@
++#!/bin/bash
++
++if [ "$#" -ne 4 ]; then
++    echo "Usage: $0 design_name filelist odir basejump_stl_dir"
++    exit -1
++fi
++
++SV2V_TCL="$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/tcl"
++SV2V_PY="$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/py"
++
++export DESIGN_NAME=$1
++export DESIGN_FILELIST="$2"
++export OUTPUT_DIR="$3"
++export BASEJUMP_STL_DIR="$4"
++export OUTPUT_ELAB_FILE="$OUTPUT_DIR/$DESIGN_NAME.elab.v"
++export OUTPUT_SV2V_FILE="$OUTPUT_DIR/$DESIGN_NAME.sv2v.v"
++export OUTPUT_PP_FILE="$OUTPUT_DIR/$DESIGN_NAME.pp.sv"
++export OUTPUT_PICKLE_FILE="$OUTPUT_DIR/$DESIGN_NAME.pickle.sv"
++
++export DESIGN_ELAB_NAME=$DESIGN_NAME
++export DESIGN_CONSTRAINTS_FILE=""
++export DESIGN_DIRECTORIES_MK=""
++
++mkdir -p $OUTPUT_DIR
++
++echo "BSG-INFO: running elab TCL..."
++dc_shell -64bit -x "source $SV2V_TCL/bsg_sv2v_setup.tcl; source $SV2V_TCL/run_dc.tcl"
++
++echo "BSG-INFO: running sv2v PY..."
++python $SV2V_PY/bsg_elab_to_rtl.py -i $OUTPUT_ELAB_FILE -o $OUTPUT_SV2V_FILE
++
++echo "BSG-INFO: post-processing memories..."
++python $SV2V_PY/bsg_mem_decomp.py $OUTPUT_SV2V_FILE $OUTPUT_PP_FILE
++
++echo "BSG-INFO: pickling extra files..."
++cat \
++    $BASEJUMP_STL_DIR/bsg_misc/bsg_defines.sv \
++    $BASEJUMP_STL_DIR/bsg_misc/bsg_dff.sv \
++    $BASEJUMP_STL_DIR/bsg_misc/bsg_dff_en.sv \
++    $BASEJUMP_STL_DIR/bsg_misc/bsg_dff_en_bypass.sv \
++    $BASEJUMP_STL_DIR/bsg_mem/bsg_mem_3r1w_sync{,_synth}.sv \
++    $BASEJUMP_STL_DIR/bsg_mem/bsg_mem_2r1w_sync{,_synth}.sv \
++    $BASEJUMP_STL_DIR/bsg_mem/bsg_mem_1r1w_sync{,_synth}.sv \
++    $BASEJUMP_STL_DIR/bsg_mem/bsg_mem_1r1w_sync_mask_write_byte{,_synth}.sv \
++    $BASEJUMP_STL_DIR/bsg_mem/bsg_mem_1r1w_sync_mask_write_bit{,_synth}.sv \
++    $BASEJUMP_STL_DIR/bsg_mem/bsg_mem_1rw_sync{,_synth}.sv \
++    $BASEJUMP_STL_DIR/bsg_mem/bsg_mem_1rw_sync_mask_write_byte{,_synth}.sv \
++    $BASEJUMP_STL_DIR/bsg_mem/bsg_mem_1rw_sync_mask_write_bit{,_synth}.sv \
++    $OUTPUT_PP_FILE > $OUTPUT_PICKLE_FILE
++
++echo "Removing bsg_defines.sv import"
++sed -i "/bsg_defines.sv/d" $OUTPUT_PICKLE_FILE
++
+-- 
+2.18.4
+
