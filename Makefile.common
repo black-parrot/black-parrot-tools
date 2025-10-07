@@ -222,15 +222,16 @@ bleach_all: ## wipes the whole repo clean: use with caution
 
 # global checkout
 .PHONY: checkout
-checkout: $(BSG_CADENV_DIR)
-checkout: ## checkout submodules
+checkout:: $(BSG_CADENV_DIR)
+checkout:: ## checkout submodules
 	@$(eval $@_hookdirs := $(HOOK_CHECKOUT_DIRS))
 	@$(eval $@_hookmatch := $(addsuffix /%,$($@_hookdirs)))
 	@$(eval $@_uservars := $(call bsg_var_user))
 	@$(eval $@_uppervars := $(filter $(call bsg_var_upper,$($@_uservars)),$($@_uservars)))
 	@$(eval $@_uppervals := $(foreach var,$($@_uppervars),$($(var))))
 	@$(eval $@_extradirs := $(filter $($@_hookmatch),$($@_uppervals)))
-	@mkdir -p ${$@_hookdirs} ${$@_extradirs}
+	echo "HIHIHIHI"
+	mkdir -p ${$@_hookdirs} ${$@_extradirs}
 	@git submodule init
 	@git submodule sync
 	@git submodule update
