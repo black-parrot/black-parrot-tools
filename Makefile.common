@@ -1,4 +1,4 @@
-# v1.0
+# v1.1 - 03/27/2026
 
 #############################
 # global settings
@@ -7,6 +7,7 @@
 SHELL := /bin/bash
 IS_TOP := $(if $(filter $(TOP),$(CURDIR)),1,0)
 IS_SINGLE := $(if $(filter 1,$(words $(MAKECMDGOALS))),1,0)
+IS_SUBMODULE := $(shell [ -f .git ] && echo 1 || echo 0)
 .DEFAULT_GOAL: help
 
 #############################
@@ -231,8 +232,7 @@ checkout:: ## checkout submodules
 	@$(eval $@_uppervars := $(filter $(call bsg_var_upper,$($@_uservars)),$($@_uservars)))
 	@$(eval $@_uppervals := $(foreach var,$($@_uppervars),$($(var))))
 	@$(eval $@_extradirs := $(filter $($@_hookmatch),$($@_uppervals)))
-	echo "HIHIHIHI"
-	mkdir -p ${$@_hookdirs} ${$@_extradirs}
+	@mkdir -p ${$@_hookdirs} ${$@_extradirs}
 	@git submodule init
 	@git submodule sync
 	@git submodule update

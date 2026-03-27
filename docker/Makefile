@@ -6,8 +6,13 @@ USE_LOCAL_CREDENTIALS ?=
 
 # Supported platforms
 ALL_PLATFORMS := $(subst Dockerfile.,,$(wildcard Dockerfile.*))
+# Check if DOCKER_PLATFORM is empty
+ifeq ($(DOCKER_PLATFORM),)
+$(error DOCKER_PLATFORM is empty. Allowed values: $(ALL_PLATFORMS))
+endif
+# Check if DOCKER_PLATFORM is correct
 ifneq ($(filter $(DOCKER_PLATFORM),$(ALL_PLATFORMS)),$(DOCKER_PLATFORM))
-$(error DOCKER_PLATFORM "$(DOCKER_PLATFORM)" is invalid. Allowed values: $(ALL_PLATFORMS)")
+$(error DOCKER_PLATFORM "$(DOCKER_PLATFORM)" is invalid. Allowed values: $(ALL_PLATFORMS))
 endif
 
 docker-run: ## mounts as a docker container
@@ -19,6 +24,8 @@ run-%: build-%
 	@$(eval DOCKER_WORKVOL := --volume=$(DOCKER_WORKMNT))
 	@$(eval DOCKER_RUNARGS += $(if $(USE_LOCAL_CREDENTIALS),--volume=$(DOCKER_WORKMNT),))
 	@$(eval DOCKER_RUNARGS += $(if $(USE_LOCAL_CREDENTIALS),--network=host,))
+	@$(eval DOCKER_RUNARGS += $(if $(USE_LOCAL_CREDENTIALS),--volume=/gro/cad:/cad,))
+	@$(eval DOCKER_RUNARGS += $(if $(USE_LOCAL_CREDENTIALS),--volume=/tools/Xilinx:/cad/Xilinx,))
 	@docker run $(DOCKER_RUNARGS) -it $(CONTAINER_NAME)
 
 docker-build: ## creates a docker image
