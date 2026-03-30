@@ -64,15 +64,15 @@ build-image:
   variables:
     TOOL: "setme"
   script:
-    - echo "[CI] doing makefile checkout" | tee -a ${JOB_LOG}
-    - make -j${BSG_CI_CORES_PER_JOB} checkout >> ${JOB_LOG} 2>&1
-    - echo "[CI] checking out ${TOOL}" | tee -a ${JOB_LOG}
-    - make -j${BSG_CI_CORES_PER_JOB} checkout.${TOOL} >> ${JOB_LOG} 2>&1
-    - echo "[CI] patching ${TOOL}" | tee -a ${JOB_LOG}
+    - echo "[CI] doing makefile checkout"
+    - make -j${BSG_CI_CORES_PER_JOB} checkout
+    - echo "[CI] checking out ${TOOL}"
+    - make -j${BSG_CI_CORES_PER_JOB} checkout.${TOOL}
+    - echo "[CI] patching ${TOOL}"
     - make -j${BSG_CI_CORES_PER_JOB} patch.${TOOL}
-    - echo "[CI] building ${TOOL}" | tee -a ${JOB_LOG}
-    - make -j${BSG_CI_CORES_PER_JOB} build.${TOOL} >> ${JOB_LOG} 2>&1
-    - echo "[CI] moving installation directory to build output" | tee -a ${JOB_LOG}
+    - echo "[CI] building ${TOOL}"
+    - make -j${BSG_CI_CORES_PER_JOB} build.${TOOL}
+    - echo "[CI] moving installation directory to build output"
     - mv ${BP_INSTALL_DIR} ${JOB_SUCCESS_ROOT}/${TOOLS_ARTIFACT}
   rules:
     - if: '"$[[ inputs.do_build_tools ]]" =~ "/on_success|on_event/"'
@@ -85,10 +85,10 @@ build-image:
     API_PACKAGE_VER: "${CI_COMMIT_REF_SLUG}"
     API_PROJECT_ID: "${CI_PROJECT_ID}"
   script:
-    - echo "[CI] gathering inputs for ${API_PACKAGE_NAME}" | tee -a ${JOB_LOG}
+    - echo "[CI] gathering inputs for ${API_PACKAGE_NAME}"
     - mkdir -p ${API_UPLOAD_ROOT}
     - find ${JOB_DEPS_ROOT} -maxdepth 1 -type d -name ${TOOLS_WILDCARD}
-        -exec rsync --remove-source-files -a {}/ ${API_UPLOAD_ROOT} \; >> ${JOB_LOG} 2>&1
+        -exec rsync --remove-source-files -a {}/ ${API_UPLOAD_ROOT} \;
     - !reference [.api_anchors, api_upload]
   rules:
     - if: '"$[[ inputs.do_build_tools ]]" =~ "/on_success|on_event/"'
@@ -101,7 +101,7 @@ build-image:
     API_PACKAGE_VER: "${CI_COMMIT_REF_SLUG}"
     API_PROJECT_ID: "${CI_PROJECT_ID}"
   script:
-    - echo "[CI] scattering outputs for ${API_PACKAGE_NAME}" | tee -a ${JOB_LOG}
+    - echo "[CI] scattering outputs for ${API_PACKAGE_NAME}"
     - !reference [.api_anchors, api_download]
     - rsync -a --remove-source-files ${API_DOWNLOAD_ROOT}/ ${COMMON_INSTALL_DIR}
 
@@ -112,7 +112,7 @@ build-image:
     RUN_SCRIPT: "./ci/common/run-ci.sh"
     SMOKE_SCRIPT: "./ci/smoke-${TOOL}.sh"
   script:
-    - echo "[CI] running script for ${SMOKE_SCRIPT}" | tee -a ${JOB_LOG}
+    - echo "[CI] running script for ${SMOKE_SCRIPT}"
     - ${RUN_SCRIPT} ${SMOKE_SCRIPT}
   rules:
     - if: '"$[[ inputs.do_smoke_tools ]]" =~ "/on_success|on_event/"'
