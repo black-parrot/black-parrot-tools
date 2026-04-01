@@ -2,7 +2,7 @@
 source $(dirname $0)/functions.sh
 
 # do the actual job
-bsg_run_task "finding axe" which axe
+bsg_run_task "axe_find" "finding axe" which axe
 bsg_sentinel_fail "which: no"
 
 # pass if no error

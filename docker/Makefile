@@ -15,6 +15,12 @@ ifneq ($(filter $(DOCKER_PLATFORM),$(ALL_PLATFORMS)),$(DOCKER_PLATFORM))
 $(error DOCKER_PLATFORM "$(DOCKER_PLATFORM)" is invalid. Allowed values: $(ALL_PLATFORMS))
 endif
 
+# User Guidance
+ifeq ($(USE_LOCAL_CREDENTIALS),)
+$(warning [WARNING] Building/Running WITHOUT local credentials.)
+$(warning [WARNING] For local development, set USE_LOCAL_CREDENTIALS otherwise the content WON'T be mounted)
+endif
+
 docker-run: ## mounts as a docker container
 docker-run: run-$(DOCKER_PLATFORM)
 run-%: build-%
