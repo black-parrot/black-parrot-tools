@@ -7,12 +7,10 @@ include $(BP_MK_DIR)/Makefile.tools
 tools_lite: ## minimal set of simulation tools
 tools_lite:
 	@+$(MAKE) build.verilator
-	@+$(MAKE) build.dromajo
 	@$(call bsg_fn_strip_binaries, $(BP_INSTALL_DIR))
 
 tools: ## standard tools
 tools: tools_lite
-	@+$(MAKE) build.spike
 	@+$(MAKE) build.surelog
 	@+$(MAKE) build.yosys
 	@+$(MAKE) build.yslang

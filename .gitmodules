@@ -17,13 +17,6 @@
 [submodule "bsg_fakeram"]
     path = bsg_fakeram
     url = https://github.com/bespoke-silicon-group/bsg_fakeram
-[submodule "riscv-isa-sim"]
-    path = riscv-isa-sim
-    url = https://github.com/riscv-software-src/riscv-isa-sim.git
 [submodule "yosys-slang"]
     path = yosys-slang
     url = https://github.com/povik/yosys-slang.git
-[submodule "dromajo"]
-    path = dromajo
-    url = https://github.com/chipsalliance/dromajo
-

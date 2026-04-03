@@ -22,21 +22,6 @@ $(eval $(call bsg_tgt_build_submodule,bsg_sv2v,$(BP_SV2V_DIR),$(BP_TOUCH_DIR),$(
 	@$(CD) $(PYVERILOG_DIR); $(PYTHON) setup.py install --install-lib=$(SV2V_SCRIPTS_DIR)/py
 	@$(SYMLINK) -r $(SV2V_SCRIPTS_DIR)/bsg_sv2v_run.sh $(BP_INSTALL_DIR)/bin/bsg_sv2v_run.sh
 
-$(eval $(call bsg_tgt_build_submodule,dromajo,$(BP_DROMAJO_DIR),$(BP_TOUCH_DIR),$(BP_PATCH_DIR),$(BP_WORK_DIR)))
-%/.dromajo_build:
-	@$(eval EXTRA_CONFIGURE_FLAGS := )
-	@$(call bsg_fn_default_cmake,$(@D),$<,$(BP_INSTALL_DIR),$(EXTRA_CONFIGURE_FLAGS))
-	@+$(MAKE) -C $(@D)
-	@$(CP) $(@D)/dromajo $(BP_BIN_DIR)
-	@$(CP) $(@D)/libdromajo_cosim.a $(BP_LIB_DIR)
-	@$(CP) $</include/* $(BP_INCLUDE_DIR)
-
-$(eval $(call bsg_tgt_build_submodule,spike,$(BP_SPIKE_DIR),$(BP_TOUCH_DIR),$(BP_PATCH_DIR),$(BP_WORK_DIR)))
-%/.spike_build:
-	@$(eval EXTRA_CONFIGURE_FLAGS := --without-boost --without-boost-asio --without-boost-regex)
-	@$(call bsg_fn_default_configure,$(@D),$<,$(BP_INSTALL_DIR),$(EXTRA_CONFIGURE_FLAGS))
-	@+$(MAKE) -C $(@D) install
-
 $(eval $(call bsg_tgt_build_submodule,surelog,$(BP_SURELOG_DIR),$(BP_TOUCH_DIR),$(BP_PATCH_DIR),$(BP_WORK_DIR)))
 %/.surelog_build:
 	@$(call bsg_fn_default_cmake,$(@D),$<,$(BP_INSTALL_DIR),$(EXTRA_CONFIGURE_FLAGS))
