@@ -8,10 +8,6 @@ environment variable. When set to 0, PMP CSR reads and writes return
 illegal (-1) and address unpacking is skipped, matching BlackParrot
 RTL behavior with num_pmp_entries_p=0.
 
-Note to reviewer: returning -1 from csr_read/csr_write for PMP CSRs
-when disabled causes dromajo to raise an illegal instruction exception,
-which matches the RTL trapping behavior. Please confirm this is the
-desired cosim semantics.
 ---
  src/riscv_cpu.cpp | 39 +++++++++++++++++++++++++++++++++++++++
  1 file changed, 39 insertions(+)
