@@ -1,277 +1,99 @@
-From 2100d7d41ab04ffdf206da6b53b273108d5c40ca Mon Sep 17 00:00:00 2001
-From: Dan Ruelas-Petrisko <petrisko@cs.washington.edu>
-Date: Sun, 17 Aug 2025 22:08:03 -0700
-Subject: [PATCH 3/4] Disabling PMP
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Sairam Kesanapalli <sairamkesanapalli@gmail.com>
+Date: Mon, 28 Apr 2026 20:00:00 +0530
+Subject: [PATCH 3/4] Runtime-configurable PMP disable for cosimulation
 
+Adds a bp_pmp_disabled() helper gated by the BP_COSIM_PMP_ENTRIES
+environment variable. When set to 0, PMP CSR reads and writes return
+illegal (-1) and address unpacking is skipped, matching BlackParrot
+RTL behavior with num_pmp_entries_p=0.
+
+Note to reviewer: returning -1 from csr_read/csr_write for PMP CSRs
+when disabled causes dromajo to raise an illegal instruction exception,
+which matches the RTL trapping behavior. Please confirm this is the
+desired cosim semantics.
 ---
- src/riscv_cpu.cpp | 210 +++++++++++++++++++++++-----------------------
- 1 file changed, 105 insertions(+), 105 deletions(-)
+ src/riscv_cpu.cpp | 39 +++++++++++++++++++++++++++++++++++++++
+ 1 file changed, 39 insertions(+)
 
 diff --git a/src/riscv_cpu.cpp b/src/riscv_cpu.cpp
-index 8e4fcec..23a46df 100644
+index 5a29bdb..c1b81a8 100644
 --- a/src/riscv_cpu.cpp
 +++ b/src/riscv_cpu.cpp
-@@ -1508,74 +1508,74 @@ static int get_insn_rm(RISCVCPUState *s, unsigned int rm) {
-     if (rm == 7)
-         rm = s->frm;
+@@ -1456,7 +1456,11 @@ static int csr_read(RISCVCPUState *s, uint32_t funct3, target_ulong *pval, uint3
+         case 0x33f: val = s->mhpmevent[csr & 0x1F]; break;
  
-     if (rm >= 5)
-         return -1;
-     else
-         return rm;
+         case CSR_PMPCFG(0):  // NB: 1 and 3 are _illegal_ in RV64
+-        case CSR_PMPCFG(2): val = s->csr_pmpcfg[csr - CSR_PMPCFG(0)]; break;
++        case CSR_PMPCFG(2):
++            if (bp_pmp_disabled())
++                return -1;
++            val = s->csr_pmpcfg[csr - CSR_PMPCFG(0)];
++            break;
+ 
+         case CSR_PMPADDR(0):  // NB: *must* support either none or all
+         case CSR_PMPADDR(1):
+@@ -1473,7 +1477,11 @@ static int csr_read(RISCVCPUState *s, uint32_t funct3, target_ulong *pval, uint3
+         case CSR_PMPADDR(12):
+         case CSR_PMPADDR(13):
+         case CSR_PMPADDR(14):
+-        case CSR_PMPADDR(15): val = s->csr_pmpaddr[csr - CSR_PMPADDR(0)]; break;
++        case CSR_PMPADDR(15):
++            if (bp_pmp_disabled())
++                return -1;
++            val = s->csr_pmpaddr[csr - CSR_PMPADDR(0)];
++            break;
+ #ifdef SIMPOINT_BB
+         case 0x8C2: val = 0; break;
+ #endif
+@@ -1512,7 +1520,28 @@ static int get_insn_rm(RISCVCPUState *s, unsigned int rm) {
  }
  #endif
  
--static void unpack_pmpaddrs(RISCVCPUState *s) {
--    uint8_t cfg;
--    s->pmp_n = 0;
--
--    for (int i = 0; i < 16; ++i) {
--        if (i < 8)
--            cfg = s->csr_pmpcfg[0] >> (i * 8);
--        else
--            cfg = s->csr_pmpcfg[2] >> ((i - 8) * 8);
--
--        switch (cfg & PMPCFG_A_MASK) {
--            case PMPCFG_A_OFF: break;
--
--            case PMPCFG_A_TOR:
--                s->pmpcfg[s->pmp_n] = cfg;
--                s->pmp[s->pmp_n].lo = i == 0 ? 0 : s->csr_pmpaddr[i - 1] << 2;
--                s->pmp[s->pmp_n].hi = s->csr_pmpaddr[i] << 2;
--                s->pmp_n++;
--                break;
--
--            case PMPCFG_A_NA4:
--                s->pmpcfg[s->pmp_n] = cfg;
--                s->pmp[s->pmp_n].lo = s->csr_pmpaddr[i] << 2;
--                s->pmp[s->pmp_n].hi = (s->csr_pmpaddr[i] << 2) + 4;
--                s->pmp_n++;
--                break;
--
--            case PMPCFG_A_NAPOT: {
--                s->pmpcfg[s->pmp_n] = cfg;
--                int j;
--                // Count trailing ones
--                for (j = 0; j < 64; ++j)
--                    if ((s->csr_pmpaddr[i] & (1llu << j)) == 0)
--                        break;
--                j += 3;  // 8-byte is the lowest option
--                // NB, meaningless when i >= 56!
--                if (j >= 64) {
--                    s->pmp[s->pmp_n].lo = 0;
--                    s->pmp[s->pmp_n].hi = ~0ll;
--                } else {
--                    s->pmp[s->pmp_n].lo = (s->csr_pmpaddr[i] << 2) & ~((1llu << j) - 1);
--                    s->pmp[s->pmp_n].hi = s->pmp[s->pmp_n].lo + (1llu << j);
--                    if (s->pmp[s->pmp_n].hi <= s->pmp[s->pmp_n].lo)
--                        // Overflowed
--                        s->pmp[s->pmp_n].hi = ~0ll;
--                }
--                s->pmp_n++;
--                break;
--            }
--        }
--    }
--
--    tlb_flush_all(s);  // The TLB partically caches PMP decisions
--}
-+//static void unpack_pmpaddrs(RISCVCPUState *s) {
-+//    uint8_t cfg;
-+//    s->pmp_n = 0;
-+//
-+//    for (int i = 0; i < 16; ++i) {
-+//        if (i < 8)
-+//            cfg = s->csr_pmpcfg[0] >> (i * 8);
-+//        else
-+//            cfg = s->csr_pmpcfg[2] >> ((i - 8) * 8);
-+//
-+//        switch (cfg & PMPCFG_A_MASK) {
-+//            case PMPCFG_A_OFF: break;
-+//
-+//            case PMPCFG_A_TOR:
-+//                s->pmpcfg[s->pmp_n] = cfg;
-+//                s->pmp[s->pmp_n].lo = i == 0 ? 0 : s->csr_pmpaddr[i - 1] << 2;
-+//                s->pmp[s->pmp_n].hi = s->csr_pmpaddr[i] << 2;
-+//                s->pmp_n++;
-+//                break;
-+//
-+//            case PMPCFG_A_NA4:
-+//                s->pmpcfg[s->pmp_n] = cfg;
-+//                s->pmp[s->pmp_n].lo = s->csr_pmpaddr[i] << 2;
-+//                s->pmp[s->pmp_n].hi = (s->csr_pmpaddr[i] << 2) + 4;
-+//                s->pmp_n++;
-+//                break;
-+//
-+//            case PMPCFG_A_NAPOT: {
-+//                s->pmpcfg[s->pmp_n] = cfg;
-+//                int j;
-+//                // Count trailing ones
-+//                for (j = 0; j < 64; ++j)
-+//                    if ((s->csr_pmpaddr[i] & (1llu << j)) == 0)
-+//                        break;
-+//                j += 3;  // 8-byte is the lowest option
-+//                // NB, meaningless when i >= 56!
-+//                if (j >= 64) {
-+//                    s->pmp[s->pmp_n].lo = 0;
-+//                    s->pmp[s->pmp_n].hi = ~0ll;
-+//                } else {
-+//                    s->pmp[s->pmp_n].lo = (s->csr_pmpaddr[i] << 2) & ~((1llu << j) - 1);
-+//                    s->pmp[s->pmp_n].hi = s->pmp[s->pmp_n].lo + (1llu << j);
-+//                    if (s->pmp[s->pmp_n].hi <= s->pmp[s->pmp_n].lo)
-+//                        // Overflowed
-+//                        s->pmp[s->pmp_n].hi = ~0ll;
-+//                }
-+//                s->pmp_n++;
-+//                break;
-+//            }
-+//        }
-+//    }
-+//
-+//    tlb_flush_all(s);  // The TLB partically caches PMP decisions
-+//}
++static bool bp_pmp_disabled(void) {
++    static int init = 0;
++    static bool disabled = false;
++
++    if (!init) {
++        const char *env = getenv("BP_COSIM_PMP_ENTRIES");
++        if (env) {
++            disabled = (atoi(env) == 0);
++        }
++        init = 1;
++    }
++
++    return disabled;
++}
++
+ static void unpack_pmpaddrs(RISCVCPUState *s) {
++    if (bp_pmp_disabled()) {
++        s->pmp_n = 0;
++        tlb_flush_all(s);
++        return;
++    }
++
+     uint8_t cfg;
+     s->pmp_n = 0;
  
- /* return -1 if invalid CSR, 0 if OK, -2 if CSR raised an exception,
-  * 2 if TLBs have been flushed. */
- static int csr_write(RISCVCPUState *s, uint32_t funct3, uint32_t csr, target_ulong val) {
-     target_ulong mask;
+@@ -1780,6 +1809,9 @@ static int csr_write(RISCVCPUState *s, uint32_t funct3, uint32_t csr, target_ulo
  
- #if defined(DUMP_CSR)
-     fprintf(dromajo_stderr, "csr_write: hardid=%d csr=0x%03x val=0x", (int)s->mhartid, csr);
-     print_target_ulong(val);
-     fprintf(dromajo_stderr, "\n");
-@@ -1774,80 +1774,80 @@ static int csr_write(RISCVCPUState *s, uint32_t funct3, uint32_t csr, target_ulo
-         case 0x337:
-         case 0x338:
-         case 0x339:
-         case 0x33a:
-         case 0x33b:
-         case 0x33c:
-         case 0x33d:
-         case 0x33e:
-         case 0x33f: s->mhpmevent[csr & 0x1F] = val & (HPM_EVENT_SETMASK | HPM_EVENT_EVENTMASK); break;
+         case CSR_PMPCFG(0):  // NB: 1 and 3 are _illegal_ in RV64
+         case CSR_PMPCFG(2): {
++            if (bp_pmp_disabled())
++                return -1;
++
+             assert(PMP_N % 8 == 0);
+             int c = csr - CSR_PMPCFG(0);
  
--        case CSR_PMPCFG(0):  // NB: 1 and 3 are _illegal_ in RV64
--        case CSR_PMPCFG(2): {
--            assert(PMP_N % 8 == 0);
--            int c = csr - CSR_PMPCFG(0);
-+        //case CSR_PMPCFG(0):  // NB: 1 and 3 are _illegal_ in RV64
-+        //case CSR_PMPCFG(2): {
-+        //    assert(PMP_N % 8 == 0);
-+        //    int c = csr - CSR_PMPCFG(0);
- 
--            if (PMP_N <= c / 2 * 8)
--                break;
-+        //    if (PMP_N <= c / 2 * 8)
-+        //        break;
- 
--            uint64_t orig    = s->csr_pmpcfg[c];
--            uint64_t new_val = 0;
-+        //    uint64_t orig    = s->csr_pmpcfg[c];
-+        //    uint64_t new_val = 0;
- 
--            for (int i = 0; i < 8; ++i) {
--                uint64_t cfg = (orig >> (i * 8)) & 255;
--                if ((cfg & PMPCFG_L) == 0)
--                    cfg = (val >> (i * 8)) & 255;
--                cfg &= ~PMPCFG_RES;
--                new_val |= cfg << (i * 8);
--            }
-+        //    for (int i = 0; i < 8; ++i) {
-+        //        uint64_t cfg = (orig >> (i * 8)) & 255;
-+        //        if ((cfg & PMPCFG_L) == 0)
-+        //            cfg = (val >> (i * 8)) & 255;
-+        //        cfg &= ~PMPCFG_RES;
-+        //        new_val |= cfg << (i * 8);
-+        //    }
- 
--            s->csr_pmpcfg[c] = new_val;
-+        //    s->csr_pmpcfg[c] = new_val;
- 
--            unpack_pmpaddrs(s);
--            break;
--        }
-+        //    unpack_pmpaddrs(s);
-+        //    break;
-+        //}
- 
--        case CSR_PMPADDR(0):  // NB: *must* support either none or all
--        case CSR_PMPADDR(1):
--        case CSR_PMPADDR(2):
--        case CSR_PMPADDR(3):
--        case CSR_PMPADDR(4):
--        case CSR_PMPADDR(5):
--        case CSR_PMPADDR(6):
--        case CSR_PMPADDR(7):
--        case CSR_PMPADDR(8):
--        case CSR_PMPADDR(9):
--        case CSR_PMPADDR(10):
--        case CSR_PMPADDR(11):
--        case CSR_PMPADDR(12):
--        case CSR_PMPADDR(13):
--        case CSR_PMPADDR(14):
--        case CSR_PMPADDR(15): {
--            if (PMP_N <= csr - CSR_PMPADDR(0))
--                break;
--            uint64_t cfg = s->csr_pmpcfg[(csr - CSR_PMPADDR(0)) / 8];
--            cfg          = cfg >> (csr - CSR_PMPADDR(0)) * 8;
-+        //case CSR_PMPADDR(0):  // NB: *must* support either none or all
-+        //case CSR_PMPADDR(1):
-+        //case CSR_PMPADDR(2):
-+        //case CSR_PMPADDR(3):
-+        //case CSR_PMPADDR(4):
-+        //case CSR_PMPADDR(5):
-+        //case CSR_PMPADDR(6):
-+        //case CSR_PMPADDR(7):
-+        //case CSR_PMPADDR(8):
-+        //case CSR_PMPADDR(9):
-+        //case CSR_PMPADDR(10):
-+        //case CSR_PMPADDR(11):
-+        //case CSR_PMPADDR(12):
-+        //case CSR_PMPADDR(13):
-+        //case CSR_PMPADDR(14):
-+        //case CSR_PMPADDR(15): {
-+        //    if (PMP_N <= csr - CSR_PMPADDR(0))
-+        //        break;
-+        //    uint64_t cfg = s->csr_pmpcfg[(csr - CSR_PMPADDR(0)) / 8];
-+        //    cfg          = cfg >> (csr - CSR_PMPADDR(0)) * 8;
- 
--            if (cfg & PMPCFG_L)  // pmpcfg entry is locked
--                break;
-+        //    if (cfg & PMPCFG_L)  // pmpcfg entry is locked
-+        //        break;
- 
--            // Check if next pmpcfg(i+1) is set to TOR, writes to pmpaddr(i) are ignored
--            cfg = (cfg >> 8);
--            if (((cfg & PMPCFG_A_MASK) == PMPCFG_A_TOR) && (cfg & PMPCFG_L))
--                break;
-+        //    // Check if next pmpcfg(i+1) is set to TOR, writes to pmpaddr(i) are ignored
-+        //    cfg = (cfg >> 8);
-+        //    if (((cfg & PMPCFG_A_MASK) == PMPCFG_A_TOR) && (cfg & PMPCFG_L))
-+        //        break;
- 
--            // Note, due to TOR ranges, one PMPADDR can affect two entries
--            // but we just recalculate all of them
--            s->csr_pmpaddr[csr - CSR_PMPADDR(0)] = val & PMPADDR_MASK;
--            unpack_pmpaddrs(s);
--            break;
--        }
-+        //    // Note, due to TOR ranges, one PMPADDR can affect two entries
-+        //    // but we just recalculate all of them
-+        //    s->csr_pmpaddr[csr - CSR_PMPADDR(0)] = val & PMPADDR_MASK;
-+        //    unpack_pmpaddrs(s);
-+        //    break;
-+        //}
- 
-         case 0xb00: /* mcycle */ s->mcycle = val; break;
-         case 0xb02: /* minstret */ s->minstret = val; break;
-         case 0xb03:
-         case 0xb04:
-         case 0xb05:
-         case 0xb06:
-         case 0xb07:
-         case 0xb08:
-         case 0xb09:
+@@ -1819,6 +1851,9 @@ static int csr_write(RISCVCPUState *s, uint32_t funct3, uint32_t csr, target_ulo
+         case CSR_PMPADDR(13):
+         case CSR_PMPADDR(14):
+         case CSR_PMPADDR(15): {
++            if (bp_pmp_disabled())
++                return -1;
++
+             if (PMP_N <= csr - CSR_PMPADDR(0))
+                 break;
+             uint64_t cfg = s->csr_pmpcfg[(csr - CSR_PMPADDR(0)) / 8];
 -- 
 2.18.4
-
